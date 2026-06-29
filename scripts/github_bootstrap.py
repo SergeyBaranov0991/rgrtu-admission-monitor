@@ -108,7 +108,14 @@ def ensure_git_repo(token: str, clone_url: str) -> None:
 
 
 def configure_actions_secrets(token: str) -> None:
-    public_key = request_json("GET", f"/repos/{REPO_FULL_NAME}/actions/secrets/public-key", token)
+    try:
+        public_key = request_json("GET", f"/repos/{REPO_FULL_NAME}/actions/secrets/public-key", token)
+    except urllib.error.HTTPError as exc:
+        if exc.code == 403:
+            print("Skipping Actions secrets: token has no repository secrets permission")
+            print("Configure DEPLOY_HOST, DEPLOY_USER, DEPLOY_PATH, and DEPLOY_SSH_KEY manually")
+            return
+        raise
     secrets = {
         "DEPLOY_HOST": SERVER_HOST,
         "DEPLOY_USER": SERVER_USER,

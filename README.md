@@ -47,6 +47,15 @@ For normal edits, prefer [config/telegram_allowed_chat_ids.txt](config/telegram_
 
 Changes pushed to `main` are deployed by GitHub Actions.
 
+GitHub Actions deployment needs these repository secrets:
+
+```text
+DEPLOY_HOST=92.51.39.164
+DEPLOY_USER=root
+DEPLOY_PATH=/opt/rgrtu-tg-bot
+DEPLOY_SSH_KEY=<private SSH key with access to the server>
+```
+
 ## Side-by-side VPS deployment
 
 Use `docker-compose.bot.yml` when the VPS already has an nginx/Caddy project on ports 80/443:
