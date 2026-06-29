@@ -1,0 +1,11 @@
+.env
+.venv/
+__pycache__/
+.pytest_cache/
+.ruff_cache/
+data/
+output/
+*.pyc
+*.tar.gz
+TZ_RGRTU_MAX_bot.md
+.git/

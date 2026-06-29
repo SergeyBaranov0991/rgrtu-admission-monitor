@@ -1,0 +1,116 @@
+{
+  "competitions": [
+    {
+      "metadata": {
+        "campaign_id": 20,
+        "competition_id": "fixture-09-03-02-budget",
+        "program_code": "09.03.02",
+        "program_name": "Информационные системы и технологии",
+        "funding_type": "budget",
+        "published_places": 19,
+        "source_url": "fixture://competition_list_full.json"
+      },
+      "rows": [
+        {"position": 1, "anonymous_applicant_id": "a001", "total_score": 240, "priority": 1, "consent_status": true},
+        {"position": 2, "anonymous_applicant_id": "a002", "total_score": 232, "priority": 1, "consent_status": true},
+        {"position": 3, "anonymous_applicant_id": "a003", "total_score": 225, "priority": 2},
+        {"position": 4, "anonymous_applicant_id": "a004", "total_score": 220, "priority": 1},
+        {"position": 5, "anonymous_applicant_id": "a005", "total_score": 217, "priority": 2},
+        {"position": 6, "anonymous_applicant_id": "a006", "total_score": 213, "priority": 1},
+        {"position": 7, "anonymous_applicant_id": "a007", "total_score": 210, "priority": 1},
+        {"position": 8, "anonymous_applicant_id": "a008", "total_score": 207, "priority": 2},
+        {"position": 9, "anonymous_applicant_id": "a009", "total_score": 204, "priority": 1},
+        {"position": 10, "anonymous_applicant_id": "a010", "total_score": 202, "priority": 1},
+        {"position": 11, "anonymous_applicant_id": "a011", "total_score": 200, "priority": 2},
+        {"position": 12, "anonymous_applicant_id": "a012", "total_score": 199, "priority": 1},
+        {"position": 13, "anonymous_applicant_id": "a013", "total_score": 198, "priority": 1},
+        {"position": 14, "anonymous_applicant_id": "a014", "total_score": 197, "priority": 2},
+        {"position": 15, "anonymous_applicant_id": "a015", "total_score": 196, "priority": 1},
+        {"position": 16, "anonymous_applicant_id": "a016", "total_score": 195, "priority": 1},
+        {"position": 17, "anonymous_applicant_id": "a017", "total_score": 195, "priority": 2},
+        {"position": 18, "anonymous_applicant_id": "a018", "total_score": 194, "priority": 1},
+        {"position": 19, "anonymous_applicant_id": "a019", "total_score": 193, "priority": 1},
+        {"position": 20, "anonymous_applicant_id": "a020", "total_score": 192, "priority": 3},
+        {"position": 21, "anonymous_applicant_id": "a021", "total_score": 191, "priority": 1}
+      ]
+    },
+    {
+      "metadata": {
+        "campaign_id": 20,
+        "competition_id": "fixture-09-03-01-budget",
+        "program_code": "09.03.01",
+        "program_name": "Информатика и вычислительная техника",
+        "funding_type": "budget",
+        "published_places": 59,
+        "source_url": "fixture://competition_list_full.json"
+      },
+      "rows": [
+        {"position": 1, "anonymous_applicant_id": "b001", "total_score": 244},
+        {"position": 2, "anonymous_applicant_id": "b002", "total_score": 231},
+        {"position": 3, "anonymous_applicant_id": "b003", "total_score": 220},
+        {"position": 4, "anonymous_applicant_id": "b004", "total_score": 210},
+        {"position": 5, "anonymous_applicant_id": "b005", "total_score": 205},
+        {"position": 6, "anonymous_applicant_id": "b006", "total_score": 200},
+        {"position": 7, "anonymous_applicant_id": "b007", "total_score": 195},
+        {"position": 8, "anonymous_applicant_id": "b008", "total_score": 195},
+        {"position": 9, "anonymous_applicant_id": "b009", "total_score": 190}
+      ]
+    },
+    {
+      "metadata": {
+        "campaign_id": 20,
+        "competition_id": "fixture-01-03-02-budget",
+        "program_code": "01.03.02",
+        "program_name": "Прикладная математика и информатика",
+        "funding_type": "budget",
+        "published_places": 10,
+        "source_url": "fixture://competition_list_full.json"
+      },
+      "rows": [
+        {"position": 1, "anonymous_applicant_id": "c001", "total_score": 230},
+        {"position": 2, "anonymous_applicant_id": "c002", "total_score": 215},
+        {"position": 3, "anonymous_applicant_id": "c003", "total_score": 201},
+        {"position": 4, "anonymous_applicant_id": "c004", "total_score": 195},
+        {"position": 5, "anonymous_applicant_id": "c005", "total_score": 180}
+      ]
+    },
+    {
+      "metadata": {
+        "campaign_id": 20,
+        "competition_id": "fixture-02-03-02-budget",
+        "program_code": "02.03.02",
+        "program_name": "Фундаментальная информатика и информационные технологии",
+        "funding_type": "budget",
+        "published_places": 15,
+        "source_url": "fixture://competition_list_full.json"
+      },
+      "rows": [
+        {"position": 1, "anonymous_applicant_id": "d001", "total_score": 235},
+        {"position": 2, "anonymous_applicant_id": "d002", "total_score": 221},
+        {"position": 3, "anonymous_applicant_id": "d003", "total_score": 209},
+        {"position": 4, "anonymous_applicant_id": "d004", "total_score": 198},
+        {"position": 5, "anonymous_applicant_id": "d005", "total_score": 195},
+        {"position": 6, "anonymous_applicant_id": "d006", "total_score": 188}
+      ]
+    },
+    {
+      "metadata": {
+        "campaign_id": 20,
+        "competition_id": "fixture-09-03-03-budget",
+        "program_code": "09.03.03",
+        "program_name": "Прикладная информатика",
+        "funding_type": "budget",
+        "published_places": 20,
+        "source_url": "fixture://competition_list_full.json"
+      },
+      "rows": [
+        {"position": 1, "anonymous_applicant_id": "e001", "total_score": 226},
+        {"position": 2, "anonymous_applicant_id": "e002", "total_score": 210},
+        {"position": 3, "anonymous_applicant_id": "e003", "total_score": 199},
+        {"position": 4, "anonymous_applicant_id": "e004", "total_score": 195},
+        {"position": 5, "anonymous_applicant_id": "e005", "total_score": 193}
+      ]
+    }
+  ]
+}
+

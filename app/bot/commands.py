@@ -1,0 +1,77 @@
+from __future__ import annotations
+
+from dataclasses import dataclass
+from pathlib import Path
+
+from app.bot.messages import render_help, render_programs, render_status
+from app.config import Settings, get_program
+from app.jobs.check_lists import DEFAULT_FIXTURE, estimate_from_fixture
+
+
+@dataclass
+class CommandContext:
+    user_id: str | None
+    text: str
+    settings: Settings
+
+
+async def handle_command(context: CommandContext) -> str:
+    text = context.text.strip()
+    command, _, arg = text.partition(" ")
+
+    if command in {"/start", "start"}:
+        return "Бот РГРТУ запущен.\n\n" + render_help()
+    if command == "/help":
+        return render_help()
+    if command == "/programs":
+        return render_programs()
+    if command == "/score":
+        return _validate_score(arg)
+    if command == "/achievements":
+        return _validate_achievements(arg)
+    if command == "/program":
+        return _render_program(arg, context.settings.total_default_score)
+    if command in {"/status", "/check"}:
+        estimates = estimate_from_fixture(
+            context.settings.total_default_score,
+            Path(DEFAULT_FIXTURE),
+        )
+        return render_status(estimates, score=context.settings.total_default_score)
+    if command == "/history":
+        return "История событий будет доступна после подключения БД snapshots."
+    if command == "/debug":
+        return "Приложение: OK\nРГРТУ: discovery adapter\nMAX: client configured"
+    return "Команда не распознана.\n\n" + render_help()
+
+
+def _validate_score(value: str) -> str:
+    try:
+        score = int(value)
+    except ValueError:
+        return "Укажите балл числом: /score 195"
+    if not 0 <= score <= 310:
+        return "Балл должен быть в диапазоне 0-310."
+    return f"Балл {score} принят. Сохранение в БД будет подключено следующим этапом."
+
+
+def _validate_achievements(value: str) -> str:
+    try:
+        achievements = int(value)
+    except ValueError:
+        return "Укажите индивидуальные достижения числом: /achievements 5"
+    if not 0 <= achievements <= 10:
+        return "Индивидуальные достижения должны быть в диапазоне 0-10."
+    return f"Индивидуальные достижения {achievements} приняты."
+
+
+def _render_program(code: str, score: int) -> str:
+    program = get_program(code.strip())
+    if program is None:
+        return "Направление не найдено. Используйте /programs."
+    estimates = [
+        estimate
+        for estimate in estimate_from_fixture(score, Path(DEFAULT_FIXTURE))
+        if estimate.program_code == program.code
+    ]
+    return render_status(estimates, score=score)
+

@@ -1,0 +1,4 @@
+bot.example.ru {
+    reverse_proxy bot:8000
+}
+

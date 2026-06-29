@@ -1,0 +1,39 @@
+[project]
+name = "rgrtu-max-bot"
+version = "0.1.0"
+description = "MAX bot for monitoring RGRTU admission competition lists"
+requires-python = ">=3.12"
+dependencies = [
+    "apscheduler>=3.10.4",
+    "beautifulsoup4>=4.12.3",
+    "fastapi>=0.115.0",
+    "httpx>=0.27.2",
+    "lxml>=5.3.0",
+    "pydantic>=2.9.0",
+    "pydantic-settings>=2.5.2",
+    "sqlalchemy>=2.0.35",
+    "tenacity>=9.0.0",
+    "uvicorn[standard]>=0.30.6",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=8.3.3",
+    "pytest-asyncio>=0.24.0",
+    "respx>=0.21.1",
+]
+
+[tool.pytest.ini_options]
+asyncio_mode = "auto"
+testpaths = ["tests"]
+
+[tool.ruff]
+line-length = 100
+target-version = "py312"
+
+[tool.hatch.build.targets.wheel]
+packages = ["app"]
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"

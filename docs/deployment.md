@@ -1,0 +1,25 @@
+# Deployment
+
+MVP target is a separate VPS with ports 80/443 open.
+
+1. Copy `.env.example` to `.env` and fill secrets.
+2. Point the domain to the VPS.
+3. Replace `bot.example.ru` in `Caddyfile`.
+4. Run `docker compose up -d --build`.
+5. Check `https://<domain>/health/ready`.
+6. Register webhook with `python scripts/register_webhook.py`.
+
+The app remains ready when RGRTU or MAX is temporarily unavailable.
+
+## Existing VPS with another project
+
+If ports 80/443 already belong to another nginx/Caddy project, do not run the default
+`docker-compose.yml` because it starts a proxy on those ports. Use:
+
+```bash
+docker compose -p rgrtu-max-bot -f docker-compose.bot.yml up -d --build
+curl -fsS http://127.0.0.1:8030/health/ready
+```
+
+The bot then runs privately on `127.0.0.1:8030`. A public MAX webhook still requires a separate
+domain routed by the existing reverse proxy or another VPS.

@@ -1,0 +1,4 @@
+# Telegram chat ids with access to the bot.
+# One id per line is recommended; comma/semicolon-separated values also work.
+262214021
+
