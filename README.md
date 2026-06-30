@@ -14,7 +14,7 @@ Current implementation is the first MVP slice:
 - independent Telegram long-polling worker for faster testing;
 - command handling skeleton;
 - admission rank interval and zone estimation;
-- fixture-backed CLI check;
+- live RGRTU public-list check through the official Livewire endpoint;
 - RGRTU Livewire subject discovery;
 - Docker Compose and operational docs.
 
@@ -26,6 +26,8 @@ python -m venv .venv
 pip install -e ".[dev]"
 pytest
 python -m app.cli check --score 195
+python -m app.cli check --score 195 --insecure
+python -m app.cli check --score 195 --fixture tests/fixtures/rgrtu/competition_list_full.json
 python -m app.cli discover
 uvicorn app.main:app --reload
 ```
@@ -73,8 +75,14 @@ curl -fsS http://127.0.0.1:8030/health/ready
 
 This binds only `127.0.0.1:8030` on the host and does not touch the existing reverse proxy.
 
-## Important
+## RGRTU Data Sources
 
-The current CLI calculation uses the fixture in `tests/fixtures/rgrtu/competition_list_full.json`.
-The exact RGRTU row-fetching request still needs Network capture from the Livewire UI before live
-snapshots are enabled.
+The bot reads current public data from:
+
+- public page: <https://postupai.rsreu.ru/guest/entrant-lists/20>
+- Livewire endpoint used by that page: <https://postupai.rsreu.ru/livewire/message/competition-lists-common>
+- subject discovery page: <https://postupai.rsreu.ru/guest/competition-lists/20>
+
+`RGRTU_CAMPAIGN_ID` controls the campaign id. The current value `20` is the RGRTU
+`Бакалавриат и специалитет 2026/2027` campaign. Local Windows checks may need `--insecure`
+if TLS verification is intercepted; Docker trusts the bundled Russian CA chain.

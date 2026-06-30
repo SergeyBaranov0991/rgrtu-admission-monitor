@@ -1,12 +1,11 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from pathlib import Path
 
 from app.bot.keyboards import is_status_request
 from app.bot.messages import render_help, render_programs, render_status
 from app.config import Settings, get_program
-from app.jobs.check_lists import DEFAULT_FIXTURE, estimate_from_fixture
+from app.jobs.check_lists import estimate_from_live
 
 
 @dataclass
@@ -19,10 +18,7 @@ class CommandContext:
 async def handle_command(context: CommandContext) -> str:
     text = context.text.strip()
     if is_status_request(text):
-        estimates = estimate_from_fixture(
-            context.settings.total_default_score,
-            Path(DEFAULT_FIXTURE),
-        )
+        estimates = await estimate_from_live(context.settings.total_default_score, context.settings)
         return render_status(estimates, score=context.settings.total_default_score)
 
     command, _, arg = text.partition(" ")
@@ -38,7 +34,7 @@ async def handle_command(context: CommandContext) -> str:
     if command == "/achievements":
         return _validate_achievements(arg)
     if command == "/program":
-        return _render_program(arg, context.settings.total_default_score)
+        return await _render_program(arg, context.settings)
     if command == "/history":
         return "История событий будет доступна после подключения БД snapshots."
     if command == "/debug":
@@ -66,13 +62,13 @@ def _validate_achievements(value: str) -> str:
     return f"Индивидуальные достижения {achievements} приняты."
 
 
-def _render_program(code: str, score: int) -> str:
+async def _render_program(code: str, settings: Settings) -> str:
     program = get_program(code.strip())
     if program is None:
         return "Направление не найдено. Используйте /programs."
     estimates = [
         estimate
-        for estimate in estimate_from_fixture(score, Path(DEFAULT_FIXTURE))
+        for estimate in await estimate_from_live(settings.total_default_score, settings)
         if estimate.program_code == program.code
     ]
-    return render_status(estimates, score=score)
+    return render_status(estimates, score=settings.total_default_score)

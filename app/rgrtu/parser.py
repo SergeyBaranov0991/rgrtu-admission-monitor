@@ -43,7 +43,12 @@ def parse_competition_table_html(
         if len(cells) < 2:
             continue
         position = _int_or_none(cells[0])
-        total_score = next((_int_or_none(cell) for cell in cells if _int_or_none(cell) is not None), None)
+        score_candidates = [
+            score
+            for score in (_int_or_none(cell) for cell in cells[1:])
+            if score is not None and 0 <= score <= 310
+        ]
+        total_score = max(score_candidates) if score_candidates else None
         if position is None or total_score is None:
             continue
         rows.append(
@@ -87,4 +92,3 @@ def _schema_hash(payload: dict[str, Any]) -> str:
         return type(obj).__name__
 
     return hashlib.sha256(json.dumps(walk(payload), sort_keys=True).encode("utf-8")).hexdigest()
-

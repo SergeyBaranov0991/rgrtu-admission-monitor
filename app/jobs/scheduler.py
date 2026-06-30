@@ -4,7 +4,7 @@ from apscheduler.schedulers.asyncio import AsyncIOScheduler
 from apscheduler.triggers.cron import CronTrigger
 
 from app.config import Settings
-from app.jobs.check_lists import estimate_from_fixture
+from app.jobs.check_lists import estimate_from_live
 
 
 def build_scheduler(settings: Settings) -> AsyncIOScheduler:
@@ -20,5 +20,5 @@ def build_scheduler(settings: Settings) -> AsyncIOScheduler:
     return scheduler
 
 
-def run_scheduled_check(settings: Settings) -> None:
-    estimate_from_fixture(settings.total_default_score)
+async def run_scheduled_check(settings: Settings) -> None:
+    await estimate_from_live(settings.total_default_score, settings)
