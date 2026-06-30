@@ -3,10 +3,12 @@ from __future__ import annotations
 from pathlib import Path
 import logging
 
+import httpx
+
 from app.admission.estimator import AdmissionEstimate, estimate_competition
 from app.config import PROGRAMS, Settings
 from app.rgrtu.base import CompetitionList, Funding, SourceStatus
-from app.rgrtu.livewire_adapter import RgrtuLivewireListAdapter, build_empty_competition
+from app.rgrtu.livewire_adapter import RgrtuLivewireListAdapter, SourceSchemaError, build_empty_competition
 from app.rgrtu.parser import parse_fixture_file
 
 
@@ -30,13 +32,24 @@ async def load_live_competitions(settings: Settings) -> list[CompetitionList]:
 async def estimate_from_live(score: int, settings: Settings) -> list[AdmissionEstimate]:
     try:
         competitions = await load_live_competitions(settings)
+    except SourceSchemaError as exc:
+        logger.exception("rgrtu_live_schema_changed")
+        competitions = unavailable_competitions(settings, error=exc, source_status=SourceStatus.SCHEMA_CHANGED)
+    except httpx.HTTPError as exc:
+        logger.exception("rgrtu_live_fetch_failed")
+        competitions = unavailable_competitions(settings, error=exc, source_status=SourceStatus.UNAVAILABLE)
     except Exception as exc:
         logger.exception("rgrtu_live_fetch_failed")
-        competitions = unavailable_competitions(settings, error=exc)
+        competitions = unavailable_competitions(settings, error=exc, source_status=SourceStatus.UNAVAILABLE)
     return [estimate_competition(competition, score) for competition in competitions]
 
 
-def unavailable_competitions(settings: Settings, *, error: Exception | None = None) -> list[CompetitionList]:
+def unavailable_competitions(
+    settings: Settings,
+    *,
+    error: Exception | None = None,
+    source_status: SourceStatus = SourceStatus.UNAVAILABLE,
+) -> list[CompetitionList]:
     competitions: list[CompetitionList] = []
     base_url = settings.rgrtu_base_url.rstrip("/")
     for program in PROGRAMS:
@@ -54,7 +67,7 @@ def unavailable_competitions(settings: Settings, *, error: Exception | None = No
                 source_url=source_url,
                 raw={"error": str(error)} if error else None,
             )
-            competition.source_status = SourceStatus.UNAVAILABLE
+            competition.source_status = source_status
             competitions.append(competition)
     return competitions
 

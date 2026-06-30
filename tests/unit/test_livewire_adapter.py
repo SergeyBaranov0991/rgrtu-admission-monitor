@@ -1,9 +1,13 @@
+import pytest
+
 from app.config import PROGRAMS
 from app.rgrtu.base import Funding
 from app.rgrtu.livewire_adapter import (
+    SourceSchemaError,
     build_empty_competition,
     build_filter_updates,
     extract_livewire_component,
+    extract_livewire_response_html,
     extract_livewire_token,
 )
 from app.rgrtu.parser import parse_competition_table_html
@@ -22,6 +26,16 @@ def test_extract_livewire_initial_state() -> None:
 
     assert component["fingerprint"]["id"] == "abc"
     assert component["serverMemo"]["data"]["campaignId"] == 20
+
+
+def test_extract_livewire_token_reports_schema_error() -> None:
+    with pytest.raises(SourceSchemaError):
+        extract_livewire_token("<html></html>")
+
+
+def test_extract_livewire_response_html_reports_schema_error() -> None:
+    with pytest.raises(SourceSchemaError):
+        extract_livewire_response_html({"effects": {}})
 
 
 def test_build_filter_updates_uses_public_ui_checkbox_values() -> None:

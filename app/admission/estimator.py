@@ -23,6 +23,8 @@ class AdmissionEstimate(BaseModel):
     confidence: float
     preliminary: bool
     source_url: str | None = None
+    source_status: SourceStatus = SourceStatus.OK
+    source_error: str | None = None
     rows_count: int
 
 
@@ -51,6 +53,8 @@ def estimate_competition(
             confidence=0.0,
             preliminary=True,
             source_url=metadata.source_url,
+            source_status=competition.source_status,
+            source_error=_source_error(competition),
             rows_count=len(competition.rows),
         )
 
@@ -79,6 +83,8 @@ def estimate_competition(
         confidence=confidence,
         preliminary=preliminary,
         source_url=metadata.source_url,
+        source_status=competition.source_status,
+        source_error=_source_error(competition),
         rows_count=len(competition.rows),
     )
 
@@ -119,3 +125,10 @@ def _forecast(current_passing: int | None, confidence: float, preliminary: bool)
         spread = max(2, spread - 2)
     return (max(0, current_passing - spread), current_passing + spread)
 
+
+def _source_error(competition: CompetitionList) -> str | None:
+    raw = competition.raw or {}
+    error = raw.get("error")
+    if error is None:
+        return None
+    return str(error)

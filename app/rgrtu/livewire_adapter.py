@@ -13,12 +13,16 @@ import httpx
 from bs4 import BeautifulSoup
 
 from app.config import PROGRAMS, ProgramConfig, Settings
-from app.rgrtu.base import CompetitionList, Funding
+from app.rgrtu.base import CompetitionList, Funding, SourceStatus
 from app.rgrtu.parser import parse_competition_table_html
 
 
 COMPONENT_NAME = "competition-lists-common"
 LIVEWIRE_TOKEN_RE = re.compile(r"window\.livewire_token = '([^']+)'")
+
+
+class SourceSchemaError(RuntimeError):
+    """Raised when the public RGRTU page is reachable but its data shape is unexpected."""
 
 
 @dataclass(frozen=True)
@@ -72,13 +76,15 @@ class RgrtuLivewireListAdapter:
         funding: Funding,
     ) -> CompetitionList:
         if program.subject_id is None:
-            return build_empty_competition(
+            competition = build_empty_competition(
                 program=program,
                 funding=funding,
                 campaign_id=self.settings.rgrtu_campaign_id,
                 source_url=self._source_url(program, funding),
                 raw={"error": "subject_id is not configured"},
             )
+            competition.source_status = SourceStatus.SCHEMA_CHANGED
+            return competition
 
         component = copy.deepcopy(initial.component)
         payload = {
@@ -98,9 +104,13 @@ class RgrtuLivewireListAdapter:
             json=payload,
         )
         response.raise_for_status()
-        data = response.json()
-        response_html = str(data.get("effects", {}).get("html", ""))
-        memo_data = data.get("serverMemo", {}).get("data", {})
+        try:
+            data = response.json()
+        except json.JSONDecodeError as exc:
+            raise SourceSchemaError("Livewire response is not valid JSON") from exc
+
+        response_html = extract_livewire_response_html(data)
+        memo_data = extract_livewire_memo_data(data)
         competition = parse_competition_table_html(
             response_html,
             program_code=program.code,
@@ -133,7 +143,7 @@ class RgrtuLivewireListAdapter:
 def extract_livewire_token(page_html: str) -> str:
     match = LIVEWIRE_TOKEN_RE.search(page_html)
     if match is None:
-        raise ValueError("Livewire token was not found")
+        raise SourceSchemaError("Livewire token was not found")
     return match.group(1)
 
 
@@ -146,7 +156,27 @@ def extract_livewire_component(page_html: str, component_name: str = COMPONENT_N
             continue
         if data.get("fingerprint", {}).get("name") == component_name:
             return data
-    raise ValueError(f"{component_name} Livewire component was not found")
+    raise SourceSchemaError(f"{component_name} Livewire component was not found")
+
+
+def extract_livewire_response_html(response_data: dict[str, Any]) -> str:
+    effects = response_data.get("effects")
+    if not isinstance(effects, dict):
+        raise SourceSchemaError("Livewire response does not contain effects")
+    html_value = effects.get("html")
+    if not isinstance(html_value, str):
+        raise SourceSchemaError("Livewire response does not contain HTML")
+    return html_value
+
+
+def extract_livewire_memo_data(response_data: dict[str, Any]) -> dict[str, Any]:
+    server_memo = response_data.get("serverMemo")
+    if not isinstance(server_memo, dict):
+        raise SourceSchemaError("Livewire response does not contain serverMemo")
+    memo_data = server_memo.get("data")
+    if not isinstance(memo_data, dict):
+        raise SourceSchemaError("Livewire response does not contain serverMemo.data")
+    return memo_data
 
 
 def build_filter_updates(subject_id: str, funding: Funding) -> list[dict[str, Any]]:

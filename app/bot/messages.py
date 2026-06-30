@@ -5,6 +5,7 @@ from zoneinfo import ZoneInfo
 
 from app.admission.estimator import AdmissionEstimate
 from app.admission.zones import ZONE_LABELS
+from app.rgrtu.base import SourceStatus
 
 
 def render_status(estimates: list[AdmissionEstimate], *, score: int, tz: str = "Europe/Moscow") -> str:
@@ -28,11 +29,15 @@ def render_estimate_block(estimate: AdmissionEstimate) -> list[str]:
     forecast = _interval(estimate.forecast_passing_score) if estimate.forecast_passing_score else "нет данных"
     confidence = _confidence_label(estimate.confidence)
     preliminary = " (предварительно)" if estimate.preliminary else ""
+    applications_count = (
+        str(estimate.rows_count) if estimate.source_status == SourceStatus.OK else "не определено"
+    )
 
     return [
         f"{estimate.program_code} {estimate.program_name} - {funding}",
+        f"Источник: {_source_label(estimate)}",
         f"Мест: {estimate.places}",
-        f"Подано заявлений: {estimate.rows_count}",
+        f"Подано заявлений: {applications_count}",
         f"Оценочная позиция: {position_text}",
         f"Текущий проходной: {estimate.current_passing_score or 'нет данных'}",
         f"Прогноз проходного: {forecast}{preliminary}",
@@ -76,3 +81,13 @@ def _confidence_label(value: float) -> str:
     if value >= 0.5:
         return "средняя"
     return "низкая"
+
+
+def _source_label(estimate: AdmissionEstimate) -> str:
+    if estimate.source_status == SourceStatus.OK:
+        if estimate.rows_count == 0:
+            return "данные получены, заявлений нет"
+        return "данные получены"
+    if estimate.source_status == SourceStatus.SCHEMA_CHANGED:
+        return "ошибка разбора данных РГРТУ"
+    return "ошибка получения данных РГРТУ"
