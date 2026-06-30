@@ -9,3 +9,11 @@ def test_extract_text_and_user_from_message_payload() -> None:
     assert text == "/status"
     assert user_id == "123"
 
+
+def test_extract_text_and_user_from_bot_started_payload() -> None:
+    payload = {"update_type": "bot_started", "user": {"user_id": 123}}
+
+    text, user_id = extract_text_and_user(payload)
+
+    assert text == "/start"
+    assert user_id == "123"

@@ -36,6 +36,12 @@ async def process_update(payload: dict) -> None:
 
 
 def extract_text_and_user(payload: dict) -> tuple[str | None, str | None]:
+    update_type = payload.get("update_type") or payload.get("update", {}).get("update_type")
+    if update_type == "bot_started":
+        user = payload.get("user") or payload.get("update", {}).get("user") or {}
+        user_id = str(user.get("user_id") or user.get("id") or payload.get("user_id") or "") or None
+        return "/start", user_id
+
     message = payload.get("message") or payload.get("update", {}).get("message") or {}
     body = message.get("body") if isinstance(message.get("body"), dict) else message
     text = body.get("text") or payload.get("text")
@@ -43,4 +49,3 @@ def extract_text_and_user(payload: dict) -> tuple[str | None, str | None]:
     user = message.get("sender") or message.get("user") or payload.get("user") or {}
     user_id = str(user.get("user_id") or user.get("id") or payload.get("user_id") or "") or None
     return text, user_id
-

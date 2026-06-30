@@ -3,6 +3,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from pathlib import Path
 
+from app.bot.keyboards import is_status_request
 from app.bot.messages import render_help, render_programs, render_status
 from app.config import Settings, get_program
 from app.jobs.check_lists import DEFAULT_FIXTURE, estimate_from_fixture
@@ -17,6 +18,13 @@ class CommandContext:
 
 async def handle_command(context: CommandContext) -> str:
     text = context.text.strip()
+    if is_status_request(text):
+        estimates = estimate_from_fixture(
+            context.settings.total_default_score,
+            Path(DEFAULT_FIXTURE),
+        )
+        return render_status(estimates, score=context.settings.total_default_score)
+
     command, _, arg = text.partition(" ")
 
     if command in {"/start", "start"}:
@@ -31,12 +39,6 @@ async def handle_command(context: CommandContext) -> str:
         return _validate_achievements(arg)
     if command == "/program":
         return _render_program(arg, context.settings.total_default_score)
-    if command in {"/status", "/check"}:
-        estimates = estimate_from_fixture(
-            context.settings.total_default_score,
-            Path(DEFAULT_FIXTURE),
-        )
-        return render_status(estimates, score=context.settings.total_default_score)
     if command == "/history":
         return "История событий будет доступна после подключения БД snapshots."
     if command == "/debug":
@@ -74,4 +76,3 @@ def _render_program(code: str, score: int) -> str:
         if estimate.program_code == program.code
     ]
     return render_status(estimates, score=score)
-

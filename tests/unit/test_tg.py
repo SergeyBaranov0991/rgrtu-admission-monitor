@@ -1,5 +1,7 @@
 from app.tg.client import extract_message, normalize_command
 from app.config import Settings
+from app.bot.keyboards import STATUS_BUTTON_TEXT
+from app.tg.client import TelegramClient
 
 
 def test_extract_message() -> None:
@@ -33,3 +35,20 @@ def test_settings_reads_allowed_chat_ids_file(tmp_path) -> None:
     settings = Settings(telegram_allowed_chat_ids_file=str(config_file))
 
     assert settings.telegram_allowed_chat_ids == {"262214021", "123456789"}
+
+
+async def test_send_message_adds_status_keyboard(monkeypatch) -> None:
+    settings = Settings(telegram_bot_token="token", telegram_allowed_chat_ids_file="missing.txt")
+    client = TelegramClient(settings)
+    calls: list[dict] = []
+
+    async def fake_post(method: str, payload: dict) -> dict:
+        calls.append({"method": method, "payload": payload})
+        return {}
+
+    monkeypatch.setattr(client, "_post", fake_post)
+
+    await client.send_message("123", "hello")
+
+    assert calls[0]["method"] == "sendMessage"
+    assert calls[0]["payload"]["reply_markup"]["keyboard"] == [[{"text": STATUS_BUTTON_TEXT}]]

@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import httpx
 
+from app.bot.keyboards import max_status_keyboard
 from app.config import Settings
 
 
@@ -15,8 +16,7 @@ class MaxClient:
         token = self.settings.max_bot_token.get_secret_value()
         url = f"{self.settings.max_api_base_url.rstrip('/')}/messages"
         payload: dict = {"text": text}
-        if attachments:
-            payload["attachments"] = attachments
+        payload["attachments"] = attachments if attachments is not None else [max_status_keyboard()]
         async with httpx.AsyncClient(timeout=20) as client:
             response = await client.post(
                 url,
@@ -25,4 +25,3 @@ class MaxClient:
                 json=payload,
             )
             response.raise_for_status()
-

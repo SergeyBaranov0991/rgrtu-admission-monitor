@@ -5,6 +5,7 @@ from typing import Any
 
 import httpx
 
+from app.bot.keyboards import telegram_status_reply_markup
 from app.config import Settings
 
 
@@ -41,16 +42,16 @@ class TelegramClient:
             payload["offset"] = offset
         return await self._post("getUpdates", payload)
 
-    async def send_message(self, chat_id: str, text: str) -> None:
+    async def send_message(self, chat_id: str, text: str, *, with_keyboard: bool = True) -> None:
         for chunk in _chunks(text):
-            await self._post(
-                "sendMessage",
-                {
-                    "chat_id": chat_id,
-                    "text": chunk,
-                    "disable_web_page_preview": True,
-                },
-            )
+            payload: dict[str, Any] = {
+                "chat_id": chat_id,
+                "text": chunk,
+                "disable_web_page_preview": True,
+            }
+            if with_keyboard:
+                payload["reply_markup"] = telegram_status_reply_markup()
+            await self._post("sendMessage", payload)
 
     async def _post(self, method: str, payload: dict[str, Any]) -> Any:
         async with httpx.AsyncClient(timeout=self.settings.telegram_poll_timeout_seconds + 10) as client:
@@ -99,4 +100,3 @@ def _chunks(text: str, limit: int = 3900) -> list[str]:
     if current:
         chunks.append(current)
     return chunks
-
