@@ -2,6 +2,12 @@
 
 MAX bot for monitoring RGRTU admission competition lists.
 
+## Bot links
+
+- MAX: <https://max.ru/se13437557_bot?start=rgrtu>
+- MAX profile: <https://max.ru/se13437557_bot>
+- Telegram: <https://t.me/monitoring_RGRTU_TG_bot>
+
 Current implementation is the first MVP slice:
 
 - FastAPI health endpoints and MAX webhook entrypoint;
