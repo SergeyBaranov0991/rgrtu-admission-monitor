@@ -11,8 +11,9 @@ RUN apt-get update \
     && apt-get install -y --no-install-recommends ca-certificates curl sqlite3 \
     && rm -rf /var/lib/apt/lists/*
 
-COPY certs/russian-trusted-sub-ca.pem /usr/local/share/ca-certificates/russian-trusted-sub-ca.crt
-RUN update-ca-certificates
+COPY certs/*.pem /usr/local/share/ca-certificates/
+RUN for cert in /usr/local/share/ca-certificates/*.pem; do cp "$cert" "${cert%.pem}.crt"; done \
+    && update-ca-certificates
 
 COPY pyproject.toml README.md ./
 COPY app ./app
