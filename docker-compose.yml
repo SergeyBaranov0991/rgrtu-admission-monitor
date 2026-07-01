@@ -17,8 +17,7 @@ services:
     image: caddy:2
     restart: unless-stopped
     ports:
-      - "80:80"
-      - "443:443"
+      - "127.0.0.1:9443:443"
     volumes:
       - ./Caddyfile:/etc/caddy/Caddyfile:ro
       - caddy_data:/data
@@ -29,4 +28,3 @@ services:
 volumes:
   caddy_data:
   caddy_config:
-

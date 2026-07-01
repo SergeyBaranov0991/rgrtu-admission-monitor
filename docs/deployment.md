@@ -1,6 +1,8 @@
 # Deployment
 
-MVP target is a separate VPS with ports 80/443 open.
+MVP target is a separate VPS with public port 443 open. HAProxy listens on public `443` and routes
+TLS traffic to Caddy/MAX on `127.0.0.1:9443`; non-TLS MTProto traffic goes to the Telegram client
+proxy.
 
 Current production VPS: `194.226.163.137`.
 Current public MAX webhook base URL: `https://rgrtu.194.226.163.137.sslip.io`.
