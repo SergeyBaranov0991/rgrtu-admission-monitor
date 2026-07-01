@@ -30,20 +30,36 @@ jobs:
     needs: test
     runs-on: ubuntu-latest
     environment: production
+    env:
+      DEPLOY_SSH_KEY: ${{ secrets.DEPLOY_SSH_KEY }}
     steps:
+      - name: Check deploy key
+        id: deploy_key
+        run: |
+          if [ -z "${DEPLOY_SSH_KEY}" ]; then
+            echo "configured=false" >> "$GITHUB_OUTPUT"
+            echo "::notice::DEPLOY_SSH_KEY is not configured; skipping deploy."
+          else
+            echo "configured=true" >> "$GITHUB_OUTPUT"
+          fi
+
       - uses: actions/checkout@v4
+        if: steps.deploy_key.outputs.configured == 'true'
 
       - name: Add SSH key
+        if: steps.deploy_key.outputs.configured == 'true'
         uses: webfactory/ssh-agent@v0.9.0
         with:
-          ssh-private-key: ${{ secrets.DEPLOY_SSH_KEY }}
+          ssh-private-key: ${{ env.DEPLOY_SSH_KEY }}
 
       - name: Trust server host key
+        if: steps.deploy_key.outputs.configured == 'true'
         run: |
           mkdir -p ~/.ssh
           ssh-keyscan -H "${DEPLOY_HOST}" >> ~/.ssh/known_hosts
 
       - name: Sync project
+        if: steps.deploy_key.outputs.configured == 'true'
         run: |
           rsync -az --delete \
             --exclude '.git' \
@@ -55,6 +71,7 @@ jobs:
             ./ "${DEPLOY_USER}@${DEPLOY_HOST}:${DEPLOY_PATH}/"
 
       - name: Sync MAX project
+        if: steps.deploy_key.outputs.configured == 'true'
         run: |
           rsync -az --delete \
             --exclude '.git' \
@@ -66,21 +83,25 @@ jobs:
             ./ "${DEPLOY_USER}@${DEPLOY_HOST}:${DEPLOY_MAX_PATH}/"
 
       - name: Deploy Telegram bot
+        if: steps.deploy_key.outputs.configured == 'true'
         run: |
           ssh "${DEPLOY_USER}@${DEPLOY_HOST}" \
             "cd '${DEPLOY_PATH}' && docker compose -p rgrtu-tg-bot -f docker-compose.tg.yml up -d --build --force-recreate"
 
       - name: Verify Telegram bot
+        if: steps.deploy_key.outputs.configured == 'true'
         run: |
           ssh "${DEPLOY_USER}@${DEPLOY_HOST}" \
             "cd '${DEPLOY_PATH}' && docker compose -p rgrtu-tg-bot -f docker-compose.tg.yml ps"
 
       - name: Deploy MAX bot
+        if: steps.deploy_key.outputs.configured == 'true'
         run: |
           ssh "${DEPLOY_USER}@${DEPLOY_HOST}" \
             "cd '${DEPLOY_MAX_PATH}' && docker compose -p rgrtu-max-bot -f docker-compose.yml up -d --build --force-recreate"
 
       - name: Verify MAX bot
+        if: steps.deploy_key.outputs.configured == 'true'
         run: |
           ssh "${DEPLOY_USER}@${DEPLOY_HOST}" \
             "cd '${DEPLOY_MAX_PATH}' && docker compose -p rgrtu-max-bot -f docker-compose.yml ps"

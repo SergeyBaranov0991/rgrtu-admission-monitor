@@ -62,6 +62,8 @@ GitHub Actions deployment uses the production host/path from
 DEPLOY_SSH_KEY=<private SSH key with access to the server>
 ```
 
+If `DEPLOY_SSH_KEY` is absent, the workflow keeps tests green and skips deploy with a notice.
+
 ## Side-by-side VPS deployment
 
 Production VPS: `194.226.163.137`.
