@@ -1,4 +1,3 @@
-bot.example.ru {
+rgrtu.194.226.163.137.sslip.io {
     reverse_proxy bot:8000
 }
-

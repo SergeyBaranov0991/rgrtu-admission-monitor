@@ -55,18 +55,27 @@ For normal edits, prefer [config/telegram_allowed_chat_ids.txt](config/telegram_
 
 Changes pushed to `main` are deployed by GitHub Actions.
 
-GitHub Actions deployment needs these repository secrets:
+GitHub Actions deployment uses the production host/path from
+[.github/workflows/deploy.yml](.github/workflows/deploy.yml). It needs this repository secret:
 
 ```text
-DEPLOY_HOST=92.51.39.164
-DEPLOY_USER=root
-DEPLOY_PATH=/opt/rgrtu-tg-bot
 DEPLOY_SSH_KEY=<private SSH key with access to the server>
 ```
 
 ## Side-by-side VPS deployment
 
-Use `docker-compose.bot.yml` when the VPS already has an nginx/Caddy project on ports 80/443:
+Production VPS: `194.226.163.137`.
+Production MAX webhook base URL: `https://rgrtu.194.226.163.137.sslip.io`.
+
+Use `docker-compose.yml` on the dedicated bot VPS. It starts the MAX webhook app and Caddy on
+ports 80/443:
+
+```bash
+docker compose -p rgrtu-max-bot -f docker-compose.yml up -d --build
+curl -fsS https://rgrtu.194.226.163.137.sslip.io/health/ready
+```
+
+Use `docker-compose.bot.yml` only when the VPS already has an nginx/Caddy project on ports 80/443:
 
 ```bash
 docker compose -p rgrtu-max-bot -f docker-compose.bot.yml up -d --build

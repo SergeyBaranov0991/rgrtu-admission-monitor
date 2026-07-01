@@ -22,9 +22,8 @@ def main() -> None:
         timeout=20,
     )
     response.raise_for_status()
-    print(response.text)
+    print(f"registered {payload['url']} status={response.status_code}")
 
 
 if __name__ == "__main__":
     main()
-

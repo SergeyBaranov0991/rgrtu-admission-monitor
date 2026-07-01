@@ -2,11 +2,14 @@
 
 MVP target is a separate VPS with ports 80/443 open.
 
+Current production VPS: `194.226.163.137`.
+Current public MAX webhook base URL: `https://rgrtu.194.226.163.137.sslip.io`.
+
 1. Copy `.env.example` to `.env` and fill secrets.
-2. Point the domain to the VPS.
-3. Replace `bot.example.ru` in `Caddyfile`.
+2. Point the domain to the VPS, or use the configured `sslip.io` DNS name.
+3. Replace `rgrtu.194.226.163.137.sslip.io` in `Caddyfile` if a dedicated domain is assigned later.
 4. Run `docker compose up -d --build`.
-5. Check `https://<domain>/health/ready`.
+5. Check `https://rgrtu.194.226.163.137.sslip.io/health/ready`.
 6. Register webhook with `python scripts/register_webhook.py`.
 
 The app remains ready when RGRTU or MAX is temporarily unavailable.

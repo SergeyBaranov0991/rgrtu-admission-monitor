@@ -17,6 +17,7 @@ RUN for cert in /usr/local/share/ca-certificates/*.pem; do cp "$cert" "${cert%.p
 
 COPY pyproject.toml README.md ./
 COPY app ./app
+COPY scripts ./scripts
 COPY tests/fixtures ./tests/fixtures
 
 RUN pip install --no-cache-dir .

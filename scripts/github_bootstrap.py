@@ -15,10 +15,7 @@ from typing import Any
 OWNER = "SergeyBaranov0991"
 REPO = "rgrtu-admission-monitor"
 REPO_FULL_NAME = f"{OWNER}/{REPO}"
-SERVER_HOST = "92.51.39.164"
-SERVER_USER = "root"
-SERVER_PATH = "/opt/rgrtu-tg-bot"
-SSH_KEY_PATH = Path(r"C:\Users\baranov_s\.ssh\codex_afc_timeweb_ed25519")
+SSH_KEY_PATH = Path(r"C:\Users\baranov_s\.ssh\rgrtu_new_server_ed25519")
 
 
 def main() -> None:
@@ -113,13 +110,10 @@ def configure_actions_secrets(token: str) -> None:
     except urllib.error.HTTPError as exc:
         if exc.code == 403:
             print("Skipping Actions secrets: token has no repository secrets permission")
-            print("Configure DEPLOY_HOST, DEPLOY_USER, DEPLOY_PATH, and DEPLOY_SSH_KEY manually")
+            print("Configure DEPLOY_SSH_KEY manually")
             return
         raise
     secrets = {
-        "DEPLOY_HOST": SERVER_HOST,
-        "DEPLOY_USER": SERVER_USER,
-        "DEPLOY_PATH": SERVER_PATH,
         "DEPLOY_SSH_KEY": SSH_KEY_PATH.read_text(encoding="utf-8"),
     }
     for name, value in secrets.items():

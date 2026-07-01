@@ -22,7 +22,7 @@ python -m app.cli discover
 ## Health
 
 ```bash
-curl -fsS https://bot.example.ru/health/ready
+curl -fsS https://rgrtu.194.226.163.137.sslip.io/health/ready
 ```
 
 ## Backup
@@ -30,4 +30,3 @@ curl -fsS https://bot.example.ru/health/ready
 ```bash
 bash scripts/backup_db.sh
 ```
-
