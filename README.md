@@ -12,7 +12,8 @@ Current implementation is the first MVP slice:
 
 - FastAPI health endpoints and MAX webhook entrypoint;
 - independent Telegram long-polling worker for faster testing;
-- command handling skeleton;
+- shared command handling for MAX and Telegram;
+- per-chat settings stored in SQLite through `app.bot.user_settings`;
 - per-chat search profile: score or RGRTU service entrant code;
 - category scope switch: only general competition or all categories;
 - admission rank interval and zone estimation;
@@ -58,6 +59,14 @@ For normal edits, prefer [config/telegram_allowed_chat_ids.txt](config/telegram_
 
 Changes pushed to `main` are deployed by GitHub Actions.
 
+## Code Structure
+
+- `app.bot.commands` routes user commands and button text.
+- `app.bot.user_settings` loads and saves per-chat score/code/category settings.
+- `app.bot.messages` renders human-readable MAX/Telegram responses.
+- `app.admission.estimator` computes rank, passing-score, confidence, and forecast fields.
+- `app.rgrtu.livewire_adapter` fetches current public RGRTU competition-list payloads.
+
 ## Bot Controls
 
 Both MAX and Telegram show the same reply buttons:
@@ -88,6 +97,7 @@ DEPLOY_SSH_KEY=<private SSH key with access to the server>
 ```
 
 If `DEPLOY_SSH_KEY` is absent, the workflow keeps tests green and skips deploy with a notice.
+The CI gate runs `python -m ruff check .` and `pytest -q` before deploying.
 
 ## Side-by-side VPS deployment
 
@@ -99,7 +109,7 @@ compose file binds Caddy to `127.0.0.1:${CADDY_HTTPS_HOST_PORT:-9443}` so public
 server-specific infrastructure outside this repository:
 
 ```bash
-docker compose -p rgrtu-max-bot -f docker-compose.yml up -d --build
+docker compose -p rgrtu-max-bot -f docker-compose.yml up -d --build --remove-orphans
 curl -fsS https://rgrtu.194.226.163.137.sslip.io/health/ready
 ```
 
