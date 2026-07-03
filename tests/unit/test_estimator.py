@@ -1,6 +1,6 @@
 from datetime import date
 
-from app.admission.estimator import estimate_competition
+from app.admission.estimator import estimate_competition, estimate_competition_by_code
 from app.admission.zones import AdmissionZone
 from app.rgrtu.base import ApplicantRow, CompetitionList, CompetitionMetadata, Funding, SourceStatus
 from app.rgrtu.parser import parse_fixture_file
@@ -88,3 +88,57 @@ def test_estimator_marks_incomplete_scores_as_insufficient_data() -> None:
     assert estimate.forecast_passing_score is None
     assert estimate.zone == AdmissionZone.INSUFFICIENT_DATA
     assert estimate.confidence < 0.5
+
+
+def test_estimator_by_code_uses_exact_row_position() -> None:
+    competition = CompetitionList(
+        metadata=CompetitionMetadata(
+            program_code="01.03.02",
+            program_name="Прикладная математика и информатика",
+            funding_type=Funding.BUDGET,
+            published_places=2,
+            applications_count=3,
+        ),
+        rows=[
+            ApplicantRow(anonymous_applicant_id="1043871", position=1, total_score=276),
+            ApplicantRow(anonymous_applicant_id="1158236", position=2, total_score=195),
+            ApplicantRow(anonymous_applicant_id="1055565", position=3, total_score=183),
+        ],
+    )
+
+    estimate = estimate_competition_by_code(
+        competition,
+        "1158236",
+        fallback_score=100,
+        today=date(2026, 7, 3),
+    )
+
+    assert estimate.target_score == 195
+    assert estimate.raw_position == (2, 2)
+    assert estimate.target_entrant_code == "1158236"
+    assert estimate.target_found is True
+
+
+def test_estimator_by_code_marks_missing_code() -> None:
+    competition = CompetitionList(
+        metadata=CompetitionMetadata(
+            program_code="01.03.02",
+            program_name="Прикладная математика и информатика",
+            funding_type=Funding.BUDGET,
+            published_places=2,
+            applications_count=1,
+        ),
+        rows=[ApplicantRow(anonymous_applicant_id="1043871", position=1, total_score=276)],
+    )
+
+    estimate = estimate_competition_by_code(
+        competition,
+        "1158236",
+        fallback_score=195,
+        today=date(2026, 7, 3),
+    )
+
+    assert estimate.raw_position is None
+    assert estimate.target_entrant_code == "1158236"
+    assert estimate.target_found is False
+    assert estimate.zone == AdmissionZone.INSUFFICIENT_DATA

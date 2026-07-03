@@ -63,6 +63,7 @@ def parse_competition_payload(
         program_code=program_code,
         program_name=program_name,
         funding_type=funding_type,
+        admission_basis=_string_or_none(payload.get("type")) or "general",
         published_places=_int_or_none(payload.get("plan")) or places,
         applications_count=applications_count,
         withdrawn_count=withdrawn_count,

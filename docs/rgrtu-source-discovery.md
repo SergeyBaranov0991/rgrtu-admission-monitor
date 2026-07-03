@@ -28,11 +28,16 @@ Tracked subjects:
 ## Adapter decision
 
 Primary adapter reads the initial `competition-lists-common` payload from
-`/guest/competition-lists/20`. For each tracked program it selects the очная competition by:
+`/guest/competition-lists/20`. In the default `general` scope, for each tracked program it selects
+the очная competition by:
 
 1. direction code;
-2. competition code `04` for общий конкурс or `06` for по договору;
+2. competition code `04` for общий конкурс;
 3. configured number of places, which disambiguates profiles with the same direction code.
+
+The `all` scope first finds the tracked full-time profile by the same general-competition anchor,
+then includes every competition category with the same `eduPrograms[].id`: quotas, target admission,
+general competition, and contract categories.
 
 The selected payload contains official `submitted` and `taken` counters plus entrant rows. The bot
 uses `submitted` for `Подано заявлений` so source failures are distinct from a real zero. Direct

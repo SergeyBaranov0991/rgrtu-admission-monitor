@@ -49,6 +49,33 @@ def test_render_estimate_block_uses_raw_position_and_shows_scored_count() -> Non
     assert "Оценочная позиция: 2" not in block
 
 
+def test_render_estimate_block_shows_category_and_code_status() -> None:
+    estimate = AdmissionEstimate(
+        program_code="01.03.02",
+        program_name="Прикладная математика и информатика",
+        funding_type="budget",
+        admission_basis="Отдельная квота",
+        places=2,
+        target_score=195,
+        raw_position=(1, 1),
+        effective_position=None,
+        current_passing_score=195,
+        forecast_passing_score=None,
+        zone=AdmissionZone.PASSING,
+        confidence=0.6,
+        preliminary=True,
+        rows_count=3,
+        scored_rows_count=3,
+        target_entrant_code="1158236",
+        target_found=True,
+    )
+
+    block = render_estimate_block(estimate)
+
+    assert block[0] == "01.03.02 Прикладная математика и информатика - бюджет, Отдельная квота"
+    assert "Код в списке: 1158236 найден" in block
+
+
 def test_render_estimate_block_distinguishes_real_zero_applications() -> None:
     estimate = AdmissionEstimate(
         program_code="09.03.02",

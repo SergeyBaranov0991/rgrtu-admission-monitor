@@ -8,11 +8,19 @@ from app.admission.zones import ZONE_LABELS
 from app.rgrtu.base import SourceStatus
 
 
-def render_status(estimates: list[AdmissionEstimate], *, score: int, tz: str = "Europe/Moscow") -> str:
+def render_status(
+    estimates: list[AdmissionEstimate],
+    *,
+    score: int,
+    entrant_code: str | None = None,
+    category_scope: str = "general",
+    tz: str = "Europe/Moscow",
+) -> str:
     now = datetime.now(ZoneInfo(tz)).strftime("%d.%m.%Y %H:%M")
     lines = [
         f"РГРТУ - статус на {now} МСК",
-        f"Конкурсный балл: {score}",
+        _profile_label(score=score, entrant_code=entrant_code),
+        f"Режим категорий: {_category_scope_label(category_scope)}",
         "",
     ]
     for estimate in estimates:
@@ -23,7 +31,7 @@ def render_status(estimates: list[AdmissionEstimate], *, score: int, tz: str = "
 
 
 def render_estimate_block(estimate: AdmissionEstimate) -> list[str]:
-    funding = "бюджет" if estimate.funding_type == "budget" else "платное"
+    funding = _funding_label(estimate)
     position = estimate.raw_position
     position_text = _interval(position) if position else "нет данных"
     forecast = _interval(estimate.forecast_passing_score) if estimate.forecast_passing_score else "нет данных"
@@ -31,7 +39,7 @@ def render_estimate_block(estimate: AdmissionEstimate) -> list[str]:
     preliminary = " (предварительно)" if estimate.preliminary else ""
     applications_count = _applications_count_label(estimate)
 
-    return [
+    lines = [
         f"{estimate.program_code} {estimate.program_name} - {funding}",
         f"Источник: {_source_label(estimate)}",
         f"Мест: {estimate.places}",
@@ -42,6 +50,9 @@ def render_estimate_block(estimate: AdmissionEstimate) -> list[str]:
         f"Статус: {ZONE_LABELS[estimate.zone]}",
         f"Достоверность: {confidence}",
     ]
+    if estimate.target_entrant_code:
+        lines.insert(4, f"Код в списке: {_target_code_label(estimate)}")
+    return lines
 
 
 def render_programs() -> str:
@@ -73,6 +84,26 @@ def _interval(value: tuple[int, int] | None) -> str:
     return f"{value[0]}-{value[1]}"
 
 
+def _profile_label(*, score: int, entrant_code: str | None) -> str:
+    if entrant_code:
+        return f"Код из сервиса приема: {entrant_code}"
+    return f"Конкурсный балл: {score}"
+
+
+def _category_scope_label(value: str) -> str:
+    return "все категории" if value == "all" else "только общий конкурс"
+
+
+def _funding_label(estimate: AdmissionEstimate) -> str:
+    funding = "платное" if estimate.funding_type == "paid" else "бюджет"
+    basis = estimate.admission_basis.strip()
+    if not basis or basis == "general":
+        return funding
+    if basis.casefold() in {"общий конкурс", "по договору"}:
+        return funding
+    return f"{funding}, {basis}"
+
+
 def _confidence_label(value: float) -> str:
     if value >= 0.75:
         return "высокая"
@@ -89,6 +120,14 @@ def _applications_count_label(estimate: AdmissionEstimate) -> str:
     if scored is not None and scored != estimate.rows_count:
         label = f"{label} (с баллами: {scored})"
     return label
+
+
+def _target_code_label(estimate: AdmissionEstimate) -> str:
+    if estimate.target_found is True:
+        return f"{estimate.target_entrant_code} найден"
+    if estimate.target_found is False:
+        return f"{estimate.target_entrant_code} не найден"
+    return f"{estimate.target_entrant_code} не проверен"
 
 
 def _source_label(estimate: AdmissionEstimate) -> str:

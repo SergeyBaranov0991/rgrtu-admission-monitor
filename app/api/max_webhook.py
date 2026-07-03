@@ -30,7 +30,8 @@ async def process_update(payload: dict) -> None:
     text, user_id = extract_text_and_user(payload)
     if not text:
         return
-    reply = await handle_command(CommandContext(user_id=user_id, text=text, settings=settings))
+    settings_user_id = f"max:{user_id}" if user_id else None
+    reply = await handle_command(CommandContext(user_id=settings_user_id, text=text, settings=settings))
     if user_id and settings.max_bot_token:
         await MaxClient(settings).send_message(user_id, reply)
 

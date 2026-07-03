@@ -5,7 +5,7 @@ import logging
 
 import httpx
 
-from app.admission.estimator import AdmissionEstimate, estimate_competition
+from app.admission.estimator import AdmissionEstimate, estimate_competition, estimate_competition_by_code
 from app.config import PROGRAMS, Settings
 from app.rgrtu.base import CompetitionList, Funding, SourceStatus
 from app.rgrtu.livewire_adapter import RgrtuLivewireListAdapter, SourceSchemaError, build_empty_competition
@@ -25,22 +25,54 @@ def estimate_from_fixture(score: int, fixture_path: Path = DEFAULT_FIXTURE) -> l
     return [estimate_competition(competition, score) for competition in competitions]
 
 
-async def load_live_competitions(settings: Settings) -> list[CompetitionList]:
-    return await RgrtuLivewireListAdapter(settings).fetch_tracked_competitions()
+async def load_live_competitions(
+    settings: Settings,
+    *,
+    category_scope: str = "general",
+) -> list[CompetitionList]:
+    return await RgrtuLivewireListAdapter(settings).fetch_tracked_competitions(
+        category_scope=category_scope,
+    )
 
 
-async def estimate_from_live(score: int, settings: Settings) -> list[AdmissionEstimate]:
+async def estimate_from_live(
+    score: int,
+    settings: Settings,
+    *,
+    category_scope: str = "general",
+    entrant_code: str | None = None,
+) -> list[AdmissionEstimate]:
     try:
-        competitions = await load_live_competitions(settings)
+        competitions = await load_live_competitions(settings, category_scope=category_scope)
     except SourceSchemaError as exc:
         logger.exception("rgrtu_live_schema_changed")
-        competitions = unavailable_competitions(settings, error=exc, source_status=SourceStatus.SCHEMA_CHANGED)
+        competitions = unavailable_competitions(
+            settings,
+            error=exc,
+            source_status=SourceStatus.SCHEMA_CHANGED,
+            category_scope=category_scope,
+        )
     except httpx.HTTPError as exc:
         logger.exception("rgrtu_live_fetch_failed")
-        competitions = unavailable_competitions(settings, error=exc, source_status=SourceStatus.UNAVAILABLE)
+        competitions = unavailable_competitions(
+            settings,
+            error=exc,
+            source_status=SourceStatus.UNAVAILABLE,
+            category_scope=category_scope,
+        )
     except Exception as exc:
         logger.exception("rgrtu_live_fetch_failed")
-        competitions = unavailable_competitions(settings, error=exc, source_status=SourceStatus.UNAVAILABLE)
+        competitions = unavailable_competitions(
+            settings,
+            error=exc,
+            source_status=SourceStatus.UNAVAILABLE,
+            category_scope=category_scope,
+        )
+    if entrant_code:
+        return [
+            estimate_competition_by_code(competition, entrant_code, fallback_score=score)
+            for competition in competitions
+        ]
     return [estimate_competition(competition, score) for competition in competitions]
 
 
@@ -49,11 +81,13 @@ def unavailable_competitions(
     *,
     error: Exception | None = None,
     source_status: SourceStatus = SourceStatus.UNAVAILABLE,
+    category_scope: str = "general",
 ) -> list[CompetitionList]:
     competitions: list[CompetitionList] = []
     base_url = settings.rgrtu_base_url.rstrip("/")
     for program in PROGRAMS:
-        for funding in (Funding.BUDGET, Funding.PAID):
+        fundings = (Funding.BUDGET, Funding.PAID) if category_scope == "all" else (Funding.BUDGET,)
+        for funding in fundings:
             competition_type = "04" if funding == Funding.BUDGET else "06"
             source_url = (
                 f"{base_url}/guest/competition-lists/{settings.rgrtu_campaign_id}"

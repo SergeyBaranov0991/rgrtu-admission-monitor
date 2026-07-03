@@ -10,6 +10,7 @@ from app.rgrtu.livewire_adapter import (
     extract_livewire_component,
     extract_livewire_response_html,
     extract_livewire_token,
+    select_profile_competitions,
     select_tracked_competition,
 )
 from app.rgrtu.parser import parse_competition_payload, parse_competition_table_html
@@ -73,6 +74,52 @@ def test_select_tracked_competition_uses_places_to_disambiguate_profiles() -> No
     selected = select_tracked_competition(competitions, program, Funding.BUDGET)
 
     assert selected["id"] == "tracked-profile"
+
+
+def test_select_profile_competitions_uses_tracked_profile_id() -> None:
+    program = next(program for program in PROGRAMS if program.code == "09.03.02")
+    competitions = [
+        {
+            "id": "other-general",
+            "programSetPrintTitle": "09.03.02 Информационные системы и технологии",
+            "code": "04",
+            "eduProgramFormCode": "1",
+            "plan": 7,
+            "eduPrograms": [{"id": "other-profile"}],
+        },
+        {
+            "id": "tracked-quota",
+            "programSetPrintTitle": "09.03.02 Информационные системы и технологии",
+            "code": "07",
+            "eduProgramFormCode": "1",
+            "plan": 4,
+            "eduPrograms": [{"id": "tracked-profile"}],
+        },
+        {
+            "id": "tracked-general",
+            "programSetPrintTitle": "09.03.02 Информационные системы и технологии",
+            "code": "04",
+            "eduProgramFormCode": "1",
+            "plan": 19,
+            "eduPrograms": [{"id": "tracked-profile"}],
+        },
+        {
+            "id": "tracked-paid",
+            "programSetPrintTitle": "09.03.02 Информационные системы и технологии",
+            "code": "06",
+            "eduProgramFormCode": "1",
+            "plan": 15,
+            "eduPrograms": [{"id": "tracked-profile"}],
+        },
+    ]
+
+    selected = select_profile_competitions(competitions, program)
+
+    assert [competition["id"] for competition in selected] == [
+        "tracked-quota",
+        "tracked-general",
+        "tracked-paid",
+    ]
 
 
 def test_competition_payload_keeps_official_applications_count() -> None:

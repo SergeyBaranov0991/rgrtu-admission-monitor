@@ -13,6 +13,7 @@ class AdmissionEstimate(BaseModel):
     program_code: str
     program_name: str
     funding_type: str
+    admission_basis: str = "general"
     places: int
     target_score: int
     raw_position: tuple[int, int] | None
@@ -27,6 +28,8 @@ class AdmissionEstimate(BaseModel):
     source_error: str | None = None
     rows_count: int
     scored_rows_count: int | None = None
+    target_entrant_code: str | None = None
+    target_found: bool | None = None
 
 
 def estimate_competition(
@@ -45,6 +48,7 @@ def estimate_competition(
             program_code=metadata.program_code,
             program_name=metadata.program_name,
             funding_type=metadata.funding_type.value,
+            admission_basis=metadata.admission_basis,
             places=places,
             target_score=target_score,
             raw_position=None,
@@ -79,6 +83,7 @@ def estimate_competition(
         program_code=metadata.program_code,
         program_name=metadata.program_name,
         funding_type=metadata.funding_type.value,
+        admission_basis=metadata.admission_basis,
         places=places,
         target_score=target_score,
         raw_position=_as_tuple(raw_interval),
@@ -96,10 +101,60 @@ def estimate_competition(
     )
 
 
+def estimate_competition_by_code(
+    competition: CompetitionList,
+    entrant_code: str,
+    *,
+    fallback_score: int,
+    today: date | None = None,
+) -> AdmissionEstimate:
+    rows = [row for row in competition.rows if row.anonymous_applicant_id == entrant_code and row.is_active]
+    if not rows:
+        estimate = estimate_competition(competition, fallback_score, today=today)
+        return estimate.model_copy(
+            update={
+                "raw_position": None,
+                "effective_position": None,
+                "forecast_passing_score": None,
+                "zone": (
+                    AdmissionZone.SOURCE_UNAVAILABLE
+                    if competition.source_status != SourceStatus.OK
+                    else AdmissionZone.INSUFFICIENT_DATA
+                ),
+                "target_entrant_code": entrant_code,
+                "target_found": False if competition.source_status == SourceStatus.OK else None,
+            }
+        )
+
+    row = min(rows, key=lambda item: item.position or 10**9)
+    target_score = row.total_score if row.total_score is not None else fallback_score
+    estimate = estimate_competition(competition, target_score, today=today)
+    position = (row.position, row.position) if row.position is not None else estimate.raw_position
+    zone = estimate.zone
+    if position is not None and estimate.scored_rows_count is not None:
+        if estimate.scored_rows_count >= estimate.places:
+            zone = _zone(_rank_interval(position), estimate.places)
+        else:
+            zone = AdmissionZone.INSUFFICIENT_DATA
+    return estimate.model_copy(
+        update={
+            "target_score": target_score,
+            "raw_position": position,
+            "target_entrant_code": entrant_code,
+            "target_found": True,
+            "zone": zone,
+        }
+    )
+
+
 def _as_tuple(interval: RankInterval | None) -> tuple[int, int] | None:
     if interval is None:
         return None
     return (interval.best, interval.worst)
+
+
+def _rank_interval(value: tuple[int, int]) -> RankInterval:
+    return RankInterval(best=value[0], worst=value[1])
 
 
 def _zone(interval: RankInterval | None, places: int) -> AdmissionZone:

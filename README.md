@@ -13,6 +13,8 @@ Current implementation is the first MVP slice:
 - FastAPI health endpoints and MAX webhook entrypoint;
 - independent Telegram long-polling worker for faster testing;
 - command handling skeleton;
+- per-chat search profile: score or RGRTU service entrant code;
+- category scope switch: only general competition or all categories;
 - admission rank interval and zone estimation;
 - live RGRTU public-list check through the official competition-list page payload;
 - RGRTU Livewire subject discovery;
@@ -54,6 +56,28 @@ For normal edits, prefer [config/telegram_allowed_chat_ids.txt](config/telegram_
 ```
 
 Changes pushed to `main` are deployed by GitHub Actions.
+
+## Bot Controls
+
+Both MAX and Telegram show the same reply buttons:
+
+- `Актуальный статус` - refresh current estimates.
+- `Искать по баллу` - switch to score profile and wait for a numeric score.
+- `Искать по коду` - switch to RGRTU service-code profile and wait for a numeric entrant code.
+- `Только общий конкурс` - show only the main budget general-competition category.
+- `Все категории` - show quotas, target admission, general competition, and contract categories for
+  the tracked full-time profile.
+
+Text commands are also supported:
+
+```text
+/score 195
+/achievements 5
+/code 1158236
+/scope general
+/scope all
+/settings
+```
 
 GitHub Actions deployment uses the production host/path from
 [.github/workflows/deploy.yml](.github/workflows/deploy.yml). It needs this repository secret:

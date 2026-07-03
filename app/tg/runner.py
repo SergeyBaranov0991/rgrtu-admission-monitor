@@ -53,7 +53,7 @@ async def _handle_message(client: TelegramClient, chat_id: str, text: str) -> No
         return
 
     command = normalize_command(text)
-    reply = await handle_command(CommandContext(user_id=chat_id, text=command, settings=settings))
+    reply = await handle_command(CommandContext(user_id=f"tg:{chat_id}", text=command, settings=settings))
     if not allowed_chat_ids and command.startswith("/start"):
         reply += (
             f"\n\nВаш Telegram chat_id: {chat_id}"

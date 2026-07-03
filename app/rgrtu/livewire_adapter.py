@@ -16,6 +16,7 @@ from app.rgrtu.parser import parse_competition_payload, parse_competition_table_
 COMPONENT_NAME = "competition-lists-common"
 BUDGET_COMPETITION_CODE = "04"
 PAID_COMPETITION_CODE = "06"
+PAID_COMPETITION_CODES = {"05", "06"}
 INITIAL_DATA_RE = re.compile(r'wire:initial-data="([^"]*)"')
 LIVEWIRE_TOKEN_RE = re.compile(r"window\.livewire_token = '([^']+)'")
 
@@ -33,7 +34,7 @@ class RgrtuLivewireListAdapter:
         self.page_url = f"{self.base_url}/guest/competition-lists/{settings.rgrtu_campaign_id}"
         self.endpoint_url = f"{self.base_url}/livewire/message/{COMPONENT_NAME}"
 
-    async def fetch_tracked_competitions(self) -> list[CompetitionList]:
+    async def fetch_tracked_competitions(self, *, category_scope: str = "general") -> list[CompetitionList]:
         async with httpx.AsyncClient(
             timeout=30,
             follow_redirects=True,
@@ -48,11 +49,48 @@ class RgrtuLivewireListAdapter:
 
             competitions: list[CompetitionList] = []
             for program in PROGRAMS:
-                for funding in (Funding.BUDGET, Funding.PAID):
-                    competitions.append(
-                        self._build_tracked_competition(competition_payloads, program, funding)
-                    )
+                if category_scope == "all":
+                    competitions.extend(self._build_all_category_competitions(competition_payloads, program))
+                    continue
+                competitions.append(
+                    self._build_tracked_competition(competition_payloads, program, Funding.BUDGET)
+                )
             return competitions
+
+    def _build_all_category_competitions(
+        self,
+        competition_payloads: list[dict[str, Any]],
+        program: ProgramConfig,
+    ) -> list[CompetitionList]:
+        try:
+            selected_payloads = select_profile_competitions(competition_payloads, program)
+        except SourceSchemaError as exc:
+            competition = build_empty_competition(
+                program=program,
+                funding=Funding.BUDGET,
+                campaign_id=self.settings.rgrtu_campaign_id,
+                source_url=f"{self.page_url}?subject={program.subject_id or ''}",
+                raw={"error": str(exc)},
+            )
+            competition.source_status = SourceStatus.SCHEMA_CHANGED
+            return [competition]
+
+        competitions: list[CompetitionList] = []
+        for payload in selected_payloads:
+            competition_id = str(payload["id"])
+            funding = funding_for_competition_payload(payload)
+            competitions.append(
+                parse_competition_payload(
+                    payload,
+                    program_code=program.code,
+                    program_name=program.name,
+                    funding_type=funding,
+                    places=_int_or_none(payload.get("plan")) or 0,
+                    source_url=self._competition_source_url(competition_id),
+                    campaign_id=self.settings.rgrtu_campaign_id,
+                )
+            )
+        return competitions
 
     def _build_tracked_competition(
         self,
@@ -131,8 +169,41 @@ def select_tracked_competition(
     return selected[0]
 
 
+def select_profile_competitions(
+    competitions: list[dict[str, Any]],
+    program: ProgramConfig,
+) -> list[dict[str, Any]]:
+    anchors: list[dict[str, Any]] = []
+    for funding in (Funding.BUDGET, Funding.PAID):
+        try:
+            anchors.append(select_tracked_competition(competitions, program, funding))
+        except SourceSchemaError:
+            continue
+    profile_ids = {
+        edu_program_id
+        for anchor in anchors
+        for edu_program_id in _edu_program_ids(anchor)
+    }
+    if not profile_ids:
+        raise SourceSchemaError(f"Tracked profile for {program.code} was not found")
+    selected = [
+        competition
+        for competition in competitions
+        if str(competition.get("eduProgramFormCode") or "") == "1"
+        and bool(profile_ids.intersection(_edu_program_ids(competition)))
+    ]
+    if not selected:
+        raise SourceSchemaError(f"No competitions found for tracked profile {program.code}")
+    return selected
+
+
 def competition_code_for_funding(funding: Funding) -> str:
     return BUDGET_COMPETITION_CODE if funding == Funding.BUDGET else PAID_COMPETITION_CODE
+
+
+def funding_for_competition_payload(payload: dict[str, Any]) -> Funding:
+    code = str(payload.get("code") or "")
+    return Funding.PAID if code in PAID_COMPETITION_CODES else Funding.BUDGET
 
 
 def _matches_program(competition: dict[str, Any], program: ProgramConfig) -> bool:
@@ -147,6 +218,17 @@ def _matches_program(competition: dict[str, Any], program: ProgramConfig) -> boo
         and str(item.get("fullTitleWithoutSubjectIndex") or "").startswith(program.code)
         for item in edu_programs
     )
+
+
+def _edu_program_ids(competition: dict[str, Any]) -> set[str]:
+    edu_programs = competition.get("eduPrograms")
+    if not isinstance(edu_programs, list):
+        return set()
+    return {
+        str(item["id"])
+        for item in edu_programs
+        if isinstance(item, dict) and item.get("id") is not None
+    }
 
 
 def _int_or_none(value: Any) -> int | None:
