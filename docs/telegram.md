@@ -11,21 +11,10 @@ cp .env.tg.example .env.tg
 docker compose -p rgrtu-tg-bot -f docker-compose.tg.yml up -d --build
 ```
 
-Use `/start` in Telegram. If `TELEGRAM_ALLOWED_CHAT_ID` is empty, the bot replies with the chat id
-so access can be locked down after the first test.
+Use `/start` in Telegram. Telegram access is not restricted by chat id; every chat gets its own
+saved score/code/category settings under `tg:<chat_id>`.
 
-Multiple family members can be allowed with the same variable:
-
-```dotenv
-TELEGRAM_ALLOWED_CHAT_ID=262214021,123456789,987654321
-```
-
-If access is already locked down, a new user still gets a rejection message with their own
-`chat_id`; add it to the comma-separated list and restart the TG container.
-
-For day-to-day changes, edit `config/telegram_allowed_chat_ids.txt` in the repository and push to
-`main`. The deploy workflow runs lint/tests, syncs the file to the server, and recreates the TG
-container.
+Changes pushed to `main` run lint/tests and recreate the TG container through the deploy workflow.
 
 ## VPS side-by-side run
 

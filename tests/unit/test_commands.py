@@ -9,10 +9,7 @@ from app.db.repositories import build_session_factory
 
 def _settings(tmp_path) -> Settings:
     db_path = tmp_path / "settings.db"
-    return Settings(
-        database_url=f"sqlite:///{db_path.as_posix()}",
-        telegram_allowed_chat_ids_file="missing-test-file.txt",
-    )
+    return Settings(database_url=f"sqlite:///{db_path.as_posix()}")
 
 
 async def test_score_command_saves_user_profile(tmp_path) -> None:

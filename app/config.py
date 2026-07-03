@@ -1,8 +1,6 @@
 from __future__ import annotations
 
 from functools import lru_cache
-import re
-from pathlib import Path
 from typing import Literal
 
 from pydantic import BaseModel, Field, SecretStr, field_validator
@@ -82,12 +80,10 @@ class Settings(BaseSettings):
 
     telegram_api_base_url: str = "https://api.telegram.org"
     telegram_bot_token: SecretStr | None = None
-    telegram_allowed_chat_id: str | None = None
     telegram_poll_timeout_seconds: int = 30
     telegram_poll_interval_seconds: float = 1.0
     telegram_delete_webhook_on_start: bool = True
     telegram_drop_pending_updates_on_start: bool = False
-    telegram_allowed_chat_ids_file: str = "config/telegram_allowed_chat_ids.txt"
 
     database_url: str = "sqlite:///./data/rgrtu.db"
     rgrtu_base_url: str = "https://postupai.rsreu.ru"
@@ -102,24 +98,6 @@ class Settings(BaseSettings):
     def total_default_score(self) -> int:
         return self.default_exam_score + self.individual_achievements
 
-    @property
-    def telegram_allowed_chat_ids(self) -> set[str]:
-        raw_values: list[str] = []
-        if self.telegram_allowed_chat_id:
-            raw_values.append(self.telegram_allowed_chat_id)
-        config_path = Path(self.telegram_allowed_chat_ids_file)
-        if config_path.exists():
-            raw_values.append(config_path.read_text(encoding="utf-8"))
-        if not raw_values:
-            return set()
-        ids: set[str] = set()
-        for line in "\n".join(raw_values).splitlines():
-            line = line.split("#", 1)[0].strip()
-            if not line:
-                continue
-            ids.update(item for item in re.split(r"[\s,;]+", line) if item)
-        return ids
-
     @field_validator(
         "max_bot_token",
         "max_webhook_secret",
@@ -133,7 +111,7 @@ class Settings(BaseSettings):
             return None
         return value
 
-    @field_validator("owner_max_user_id", "telegram_allowed_chat_id", mode="before")
+    @field_validator("owner_max_user_id", mode="before")
     @classmethod
     def empty_string_to_none(cls, value: object) -> object:
         if value == "":

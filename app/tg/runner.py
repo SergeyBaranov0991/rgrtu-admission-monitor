@@ -44,21 +44,8 @@ async def run_polling() -> None:
 
 async def _handle_message(client: TelegramClient, chat_id: str, text: str) -> None:
     settings = get_settings()
-    allowed_chat_ids = settings.telegram_allowed_chat_ids
-    if allowed_chat_ids and chat_id not in allowed_chat_ids:
-        await client.send_message(
-            chat_id,
-            f"Доступ закрыт.\n\nВаш Telegram chat_id: {chat_id}\nПередайте его владельцу бота.",
-        )
-        return
-
     command = normalize_command(text)
     reply = await handle_command(CommandContext(user_id=f"tg:{chat_id}", text=command, settings=settings))
-    if not allowed_chat_ids and command.startswith("/start"):
-        reply += (
-            f"\n\nВаш Telegram chat_id: {chat_id}"
-            "\nДля ограничения доступа укажите TELEGRAM_ALLOWED_CHAT_ID."
-        )
     await client.send_message(chat_id, reply)
 
 

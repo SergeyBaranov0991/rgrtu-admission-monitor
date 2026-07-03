@@ -1228,8 +1228,6 @@ rgrtu-max-bot/
 ├── docker-compose.yml
 ├── docker-compose.tg.yml
 ├── docker-compose.bot.yml
-├── config/
-│   └── telegram_allowed_chat_ids.txt
 ├── pyproject.toml
 ├── .env.example
 └── README.md
@@ -1411,7 +1409,7 @@ tests/fixtures/rgrtu/
 - [ ] HTTPS 443 работает;
 - [ ] secret проверяется;
 - [ ] основные команды работают;
-- [ ] посторонние не имеют доступа.
+- [ ] Telegram бот отвечает без ограничения по `chat_id`.
 
 ### РГРТУ
 

@@ -1,6 +1,8 @@
-from app.tg.client import extract_message, normalize_command
+from app.bot.commands import CommandContext
 from app.config import Settings
 from app.bot.keyboards import STATUS_BUTTON_TEXT
+from app.tg import runner
+from app.tg.client import extract_message, normalize_command
 from app.tg.client import TelegramClient
 
 
@@ -20,25 +22,8 @@ def test_normalize_command_removes_bot_username() -> None:
     assert normalize_command("/program@RgrtuBot 09.03.02") == "/program 09.03.02"
 
 
-def test_settings_parses_multiple_allowed_chat_ids() -> None:
-    settings = Settings(
-        telegram_allowed_chat_id="262214021, 111;222\n333",
-        telegram_allowed_chat_ids_file="missing-test-file.txt",
-    )
-
-    assert settings.telegram_allowed_chat_ids == {"262214021", "111", "222", "333"}
-
-
-def test_settings_reads_allowed_chat_ids_file(tmp_path) -> None:
-    config_file = tmp_path / "ids.txt"
-    config_file.write_text("# comment\n262214021\n123456789 # family\n", encoding="utf-8")
-    settings = Settings(telegram_allowed_chat_ids_file=str(config_file))
-
-    assert settings.telegram_allowed_chat_ids == {"262214021", "123456789"}
-
-
 async def test_send_message_adds_status_keyboard(monkeypatch) -> None:
-    settings = Settings(telegram_bot_token="token", telegram_allowed_chat_ids_file="missing.txt")
+    settings = Settings(telegram_bot_token="token")
     client = TelegramClient(settings)
     calls: list[dict] = []
 
@@ -52,3 +37,25 @@ async def test_send_message_adds_status_keyboard(monkeypatch) -> None:
 
     assert calls[0]["method"] == "sendMessage"
     assert calls[0]["payload"]["reply_markup"]["keyboard"][0] == [{"text": STATUS_BUTTON_TEXT}]
+
+
+async def test_runner_accepts_any_chat_id(monkeypatch) -> None:
+    contexts: list[CommandContext] = []
+    sent: list[tuple[str, str]] = []
+
+    class FakeClient:
+        async def send_message(self, chat_id: str, text: str) -> None:
+            sent.append((chat_id, text))
+
+    async def fake_handle_command(context: CommandContext) -> str:
+        contexts.append(context)
+        return "ok"
+
+    monkeypatch.setattr(runner, "get_settings", lambda: Settings())
+    monkeypatch.setattr(runner, "handle_command", fake_handle_command)
+
+    await runner._handle_message(FakeClient(), "999", "/start")
+
+    assert contexts[0].user_id == "tg:999"
+    assert contexts[0].text == "/start"
+    assert sent == [("999", "ok")]

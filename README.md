@@ -44,20 +44,8 @@ cp .env.tg.example .env.tg
 docker compose -p rgrtu-tg-bot -f docker-compose.tg.yml up -d --build
 ```
 
-Allow several Telegram chats by comma-separating ids:
-
-```dotenv
-TELEGRAM_ALLOWED_CHAT_ID=262214021,123456789
-```
-
-For normal edits, prefer [config/telegram_allowed_chat_ids.txt](config/telegram_allowed_chat_ids.txt):
-
-```text
-262214021
-123456789
-```
-
-Changes pushed to `main` are deployed by GitHub Actions.
+Telegram access is not restricted by chat id. Changes pushed to `main` are deployed by GitHub
+Actions.
 
 ## Code Structure
 
