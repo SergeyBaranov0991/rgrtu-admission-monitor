@@ -24,6 +24,31 @@ def test_render_estimate_block_includes_application_count() -> None:
     assert "Подано заявлений: 21" in render_estimate_block(estimate)
 
 
+def test_render_estimate_block_uses_raw_position_and_shows_scored_count() -> None:
+    estimate = AdmissionEstimate(
+        program_code="09.03.03",
+        program_name="Прикладная информатика",
+        funding_type="budget",
+        places=20,
+        target_score=195,
+        raw_position=(5, 5),
+        effective_position=(2, 2),
+        current_passing_score=None,
+        forecast_passing_score=None,
+        zone=AdmissionZone.INSUFFICIENT_DATA,
+        confidence=0.2,
+        preliminary=True,
+        rows_count=99,
+        scored_rows_count=7,
+    )
+
+    block = render_estimate_block(estimate)
+
+    assert "Подано заявлений: 99 (с баллами: 7)" in block
+    assert "Оценочная позиция: 5" in block
+    assert "Оценочная позиция: 2" not in block
+
+
 def test_render_estimate_block_distinguishes_real_zero_applications() -> None:
     estimate = AdmissionEstimate(
         program_code="09.03.02",

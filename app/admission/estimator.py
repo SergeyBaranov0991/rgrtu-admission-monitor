@@ -26,6 +26,7 @@ class AdmissionEstimate(BaseModel):
     source_status: SourceStatus = SourceStatus.OK
     source_error: str | None = None
     rows_count: int
+    scored_rows_count: int | None = None
 
 
 def estimate_competition(
@@ -57,17 +58,20 @@ def estimate_competition(
             source_status=competition.source_status,
             source_error=_source_error(competition),
             rows_count=rows_count,
+            scored_rows_count=None,
         )
 
     rows_count = _applications_count(competition)
+    scored_rows_count = _scored_rows_count(competition)
     raw_interval = score_rank_interval(competition.rows, target_score)
     effective = effective_rows(competition.rows)
     effective_interval = score_rank_interval(effective, target_score)
-    current_passing = passing_score(effective or competition.rows, places)
+    has_complete_score_rows = scored_rows_count >= places
+    current_passing = passing_score(competition.rows, places) if has_complete_score_rows else None
 
     preliminary = today < date(2026, 7, 27)
-    confidence = _confidence(competition, effective, preliminary)
-    position_for_zone = effective_interval or raw_interval
+    confidence = _confidence(competition, scored_rows_count, preliminary)
+    position_for_zone = raw_interval if has_complete_score_rows else None
     zone = _zone(position_for_zone, places)
     forecast = _forecast(current_passing, confidence, preliminary)
 
@@ -88,6 +92,7 @@ def estimate_competition(
         source_status=competition.source_status,
         source_error=_source_error(competition),
         rows_count=rows_count,
+        scored_rows_count=scored_rows_count,
     )
 
 
@@ -107,13 +112,20 @@ def _zone(interval: RankInterval | None, places: int) -> AdmissionZone:
     return AdmissionZone.NON_PASSING
 
 
-def _confidence(competition: CompetitionList, effective: list, preliminary: bool) -> float:
+def _confidence(competition: CompetitionList, scored_rows_count: int, preliminary: bool) -> float:
     if not competition.rows:
         return 0.2
+    if scored_rows_count < competition.metadata.published_places:
+        base = 0.32
+        if preliminary:
+            base -= 0.12
+        return max(0.1, round(base, 2))
+
     has_decision_data = any(row.has_decision_data for row in competition.rows)
     base = 0.78 if has_decision_data else 0.56
-    if len(effective) < competition.metadata.published_places:
-        base -= 0.08
+    applications_count = competition.metadata.applications_count
+    if applications_count is not None and scored_rows_count < applications_count:
+        base -= 0.1
     if preliminary:
         base -= 0.12
     return max(0.1, min(0.95, round(base, 2)))
@@ -140,3 +152,11 @@ def _applications_count(competition: CompetitionList) -> int:
     if competition.metadata.applications_count is not None:
         return competition.metadata.applications_count
     return len(competition.rows)
+
+
+def _scored_rows_count(competition: CompetitionList) -> int:
+    return sum(
+        1
+        for row in competition.rows
+        if row.total_score is not None and row.is_active
+    )

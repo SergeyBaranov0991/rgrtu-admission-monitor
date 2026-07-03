@@ -24,14 +24,12 @@ def render_status(estimates: list[AdmissionEstimate], *, score: int, tz: str = "
 
 def render_estimate_block(estimate: AdmissionEstimate) -> list[str]:
     funding = "бюджет" if estimate.funding_type == "budget" else "платное"
-    position = estimate.effective_position or estimate.raw_position
+    position = estimate.raw_position
     position_text = _interval(position) if position else "нет данных"
     forecast = _interval(estimate.forecast_passing_score) if estimate.forecast_passing_score else "нет данных"
     confidence = _confidence_label(estimate.confidence)
     preliminary = " (предварительно)" if estimate.preliminary else ""
-    applications_count = (
-        str(estimate.rows_count) if estimate.source_status == SourceStatus.OK else "не определено"
-    )
+    applications_count = _applications_count_label(estimate)
 
     return [
         f"{estimate.program_code} {estimate.program_name} - {funding}",
@@ -81,6 +79,16 @@ def _confidence_label(value: float) -> str:
     if value >= 0.5:
         return "средняя"
     return "низкая"
+
+
+def _applications_count_label(estimate: AdmissionEstimate) -> str:
+    if estimate.source_status != SourceStatus.OK:
+        return "не определено"
+    label = str(estimate.rows_count)
+    scored = estimate.scored_rows_count
+    if scored is not None and scored != estimate.rows_count:
+        label = f"{label} (с баллами: {scored})"
+    return label
 
 
 def _source_label(estimate: AdmissionEstimate) -> str:
