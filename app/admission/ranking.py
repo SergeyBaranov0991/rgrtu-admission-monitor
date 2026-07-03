@@ -20,7 +20,9 @@ def score_rank_interval(rows: list[ApplicantRow], target_score: int) -> RankInte
         return None
     higher = sum(1 for score in scores if score > target_score)
     equal = sum(1 for score in scores if score == target_score)
-    return RankInterval(best=higher + 1, worst=higher + equal + 1)
+    if equal == 0:
+        return RankInterval(best=higher + 1, worst=higher + 1)
+    return RankInterval(best=higher + 1, worst=higher + equal)
 
 
 def passing_score(rows: list[ApplicantRow], places: int) -> int | None:
@@ -51,4 +53,3 @@ def effective_rows(rows: list[ApplicantRow]) -> list[ApplicantRow]:
         if row.priority is not None and row.priority <= 2:
             selected.append(row)
     return selected
-

@@ -12,7 +12,7 @@ def test_estimator_marks_borderline_interval() -> None:
     estimate = estimate_competition(competition, 195, today=date(2026, 7, 29))
 
     assert estimate.zone == AdmissionZone.PASSING
-    assert estimate.raw_position == (16, 18)
+    assert estimate.raw_position == (16, 17)
     assert estimate.current_passing_score == 193
 
 
@@ -56,8 +56,8 @@ def test_estimator_uses_raw_position_and_passing_score() -> None:
 
     estimate = estimate_competition(competition, 195, today=date(2026, 7, 3))
 
-    assert estimate.raw_position == (3, 4)
-    assert estimate.effective_position == (1, 2)
+    assert estimate.raw_position == (3, 3)
+    assert estimate.effective_position == (1, 1)
     assert estimate.current_passing_score == 230
     assert estimate.zone == AdmissionZone.BORDERLINE
 
@@ -82,7 +82,7 @@ def test_estimator_marks_incomplete_scores_as_insufficient_data() -> None:
 
     estimate = estimate_competition(competition, 195, today=date(2026, 7, 3))
 
-    assert estimate.raw_position == (2, 3)
+    assert estimate.raw_position == (2, 2)
     assert estimate.scored_rows_count == 2
     assert estimate.current_passing_score is None
     assert estimate.forecast_passing_score is None

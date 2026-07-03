@@ -39,7 +39,12 @@ class ApplicantRow(BaseModel):
         status = (self.application_status or "").lower()
         enrollment = (self.enrollment_status or "").lower()
         inactive_markers = ("отозв", "исключ", "withdraw", "reject", "зачислен")
-        return not any(marker in status or marker in enrollment for marker in inactive_markers)
+        if any(marker in status or marker in enrollment for marker in inactive_markers):
+            return False
+        if not status:
+            return True
+        active_markers = ("участвует в конкурсе", "participates")
+        return any(marker in status for marker in active_markers)
 
     @property
     def has_decision_data(self) -> bool:
