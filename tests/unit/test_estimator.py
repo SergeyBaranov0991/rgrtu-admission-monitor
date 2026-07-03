@@ -86,6 +86,8 @@ def test_estimator_marks_incomplete_scores_as_insufficient_data() -> None:
     assert estimate.scored_rows_count == 2
     assert estimate.current_passing_score is None
     assert estimate.forecast_passing_score is None
+    assert estimate.published_score_floor == 195
+    assert estimate.draft_forecast_score == (180, 210)
     assert estimate.zone == AdmissionZone.INSUFFICIENT_DATA
     assert estimate.confidence < 0.5
 

@@ -13,11 +13,11 @@ services:
       timeout: 5s
       retries: 3
 
-  proxy:
+  caddy:
     image: caddy:2
     restart: unless-stopped
     ports:
-      - "127.0.0.1:9443:443"
+      - "127.0.0.1:${CADDY_HTTPS_HOST_PORT:-9443}:443"
     volumes:
       - ./Caddyfile:/etc/caddy/Caddyfile:ro
       - caddy_data:/data

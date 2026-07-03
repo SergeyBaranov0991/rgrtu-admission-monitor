@@ -1,8 +1,8 @@
 # Deployment
 
-MVP target is a separate VPS with public port 443 open. HAProxy listens on public `443` and routes
-TLS traffic to Caddy/MAX on `127.0.0.1:9443`; non-TLS MTProto traffic goes to the Telegram client
-proxy.
+MVP target is a separate VPS with a public HTTPS route to the MAX webhook. The bot repository starts
+the application and Caddy only; any host-level routing is server-specific infrastructure and is kept
+outside this repository.
 
 Current production VPS: `194.226.163.137`.
 Current public MAX webhook base URL: `https://rgrtu.194.226.163.137.sslip.io`.
@@ -18,8 +18,7 @@ The app remains ready when RGRTU or MAX is temporarily unavailable.
 
 ## Existing VPS with another project
 
-If ports 80/443 already belong to another nginx/Caddy project, do not run the default
-`docker-compose.yml` because it starts a proxy on those ports. Use:
+If the public HTTPS route belongs to another nginx/Caddy project, use:
 
 ```bash
 docker compose -p rgrtu-max-bot -f docker-compose.bot.yml up -d --build

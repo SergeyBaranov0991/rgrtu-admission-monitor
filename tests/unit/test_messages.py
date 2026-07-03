@@ -35,6 +35,8 @@ def test_render_estimate_block_uses_raw_position_and_shows_scored_count() -> Non
         effective_position=(2, 2),
         current_passing_score=None,
         forecast_passing_score=None,
+        published_score_floor=186,
+        draft_forecast_score=(171, 201),
         zone=AdmissionZone.INSUFFICIENT_DATA,
         confidence=0.2,
         preliminary=True,
@@ -46,7 +48,10 @@ def test_render_estimate_block_uses_raw_position_and_shows_scored_count() -> Non
 
     assert "Подано заявлений: 99 (с баллами: 7)" in block
     assert "Оценочная позиция: 5" in block
-    assert "Расчет: позиция по 7 строкам с баллами; для проходного нужно минимум 20." in block
+    assert "Нижняя граница по опубликованным баллам: 186" in block
+    assert "Расчет: позиция, нижняя граница и черновой прогноз по 7 строкам с баллами; для обычного проходного нужно минимум 20." in block
+    assert "Прогноз проходного: черновой 171-201 (предварительно)" in block
+    assert "Достоверность: минимальная" in block
     assert "Оценочная позиция: 2" not in block
 
 

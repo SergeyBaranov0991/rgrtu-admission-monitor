@@ -20,6 +20,8 @@ class AdmissionEstimate(BaseModel):
     effective_position: tuple[int, int] | None
     current_passing_score: int | None
     forecast_passing_score: tuple[int, int] | None
+    published_score_floor: int | None = None
+    draft_forecast_score: tuple[int, int] | None = None
     zone: AdmissionZone
     confidence: float
     preliminary: bool
@@ -55,6 +57,8 @@ def estimate_competition(
             effective_position=None,
             current_passing_score=None,
             forecast_passing_score=None,
+            published_score_floor=None,
+            draft_forecast_score=None,
             zone=AdmissionZone.SOURCE_UNAVAILABLE,
             confidence=0.0,
             preliminary=True,
@@ -71,13 +75,15 @@ def estimate_competition(
     effective = effective_rows(competition.rows)
     effective_interval = score_rank_interval(effective, target_score)
     has_complete_score_rows = scored_rows_count >= places
-    current_passing = passing_score(competition.rows, places) if has_complete_score_rows else None
+    score_floor = passing_score(competition.rows, places)
+    current_passing = score_floor if has_complete_score_rows else None
 
     preliminary = today < date(2026, 7, 27)
     confidence = _confidence(competition, scored_rows_count, preliminary)
     position_for_zone = raw_interval if has_complete_score_rows else None
     zone = _zone(position_for_zone, places)
     forecast = _forecast(current_passing, confidence, preliminary)
+    draft_forecast = _draft_forecast(score_floor, preliminary) if not has_complete_score_rows else None
 
     return AdmissionEstimate(
         program_code=metadata.program_code,
@@ -90,6 +96,8 @@ def estimate_competition(
         effective_position=_as_tuple(effective_interval),
         current_passing_score=current_passing,
         forecast_passing_score=forecast,
+        published_score_floor=score_floor if not has_complete_score_rows else None,
+        draft_forecast_score=draft_forecast,
         zone=zone,
         confidence=confidence,
         preliminary=preliminary,
@@ -193,6 +201,13 @@ def _forecast(current_passing: int | None, confidence: float, preliminary: bool)
     if confidence >= 0.75:
         spread = max(2, spread - 2)
     return (max(0, current_passing - spread), current_passing + spread)
+
+
+def _draft_forecast(score_floor: int | None, preliminary: bool) -> tuple[int, int] | None:
+    if score_floor is None:
+        return None
+    spread = 15 if preliminary else 10
+    return (max(0, score_floor - spread), score_floor + spread)
 
 
 def _source_error(competition: CompetitionList) -> str | None:

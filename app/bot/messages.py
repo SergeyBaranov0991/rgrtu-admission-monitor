@@ -34,7 +34,7 @@ def render_estimate_block(estimate: AdmissionEstimate) -> list[str]:
     funding = _funding_label(estimate)
     position = estimate.raw_position
     position_text = _interval(position) if position else "нет данных"
-    forecast = _interval(estimate.forecast_passing_score) if estimate.forecast_passing_score else "нет данных"
+    forecast = _forecast_label(estimate)
     confidence = _confidence_label(estimate.confidence)
     preliminary = " (предварительно)" if estimate.preliminary else ""
     applications_count = _applications_count_label(estimate)
@@ -56,6 +56,9 @@ def render_estimate_block(estimate: AdmissionEstimate) -> list[str]:
     if note:
         insert_at = lines.index(f"Текущий проходной: {estimate.current_passing_score or 'нет данных'}") + 1
         lines.insert(insert_at, note)
+    if estimate.published_score_floor is not None:
+        insert_at = lines.index(f"Текущий проходной: {estimate.current_passing_score or 'нет данных'}") + 1
+        lines.insert(insert_at, f"Нижняя граница по опубликованным баллам: {estimate.published_score_floor}")
     return lines
 
 
@@ -88,6 +91,14 @@ def _interval(value: tuple[int, int] | None) -> str:
     return f"{value[0]}-{value[1]}"
 
 
+def _forecast_label(estimate: AdmissionEstimate) -> str:
+    if estimate.forecast_passing_score:
+        return _interval(estimate.forecast_passing_score)
+    if estimate.draft_forecast_score:
+        return f"черновой {_interval(estimate.draft_forecast_score)}"
+    return "нет данных"
+
+
 def _profile_label(*, score: int, entrant_code: str | None) -> str:
     if entrant_code:
         return f"Код из сервиса приема: {entrant_code}"
@@ -113,6 +124,8 @@ def _confidence_label(value: float) -> str:
         return "высокая"
     if value >= 0.5:
         return "средняя"
+    if value < 0.25:
+        return "минимальная"
     return "низкая"
 
 
@@ -142,8 +155,8 @@ def _calculation_note(estimate: AdmissionEstimate) -> str | None:
         return None
     if scored < estimate.places:
         return (
-            f"Расчет: позиция по {scored} строкам с баллами; "
-            f"для проходного нужно минимум {estimate.places}."
+            f"Расчет: позиция, нижняя граница и черновой прогноз по {scored} строкам с баллами; "
+            f"для обычного проходного нужно минимум {estimate.places}."
         )
     return f"Расчет: по {scored} строкам с баллами."
 

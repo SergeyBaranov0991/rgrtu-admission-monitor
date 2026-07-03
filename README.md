@@ -93,9 +93,9 @@ If `DEPLOY_SSH_KEY` is absent, the workflow keeps tests green and skips deploy w
 Production VPS: `194.226.163.137`.
 Production MAX webhook base URL: `https://rgrtu.194.226.163.137.sslip.io`.
 
-Use `docker-compose.yml` on the dedicated bot VPS. It starts the MAX webhook app and Caddy behind
-the host HAProxy TCP router. Public port 443 is shared: TLS traffic goes to Caddy/MAX, MTProto
-traffic goes to the Telegram client proxy:
+Use `docker-compose.yml` on the dedicated bot VPS. It starts the MAX webhook app and Caddy. The
+compose file binds Caddy to `127.0.0.1:${CADDY_HTTPS_HOST_PORT:-9443}` so public routing can stay in
+server-specific infrastructure outside this repository:
 
 ```bash
 docker compose -p rgrtu-max-bot -f docker-compose.yml up -d --build
