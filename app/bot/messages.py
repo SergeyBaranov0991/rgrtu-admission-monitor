@@ -52,6 +52,10 @@ def render_estimate_block(estimate: AdmissionEstimate) -> list[str]:
     ]
     if estimate.target_entrant_code:
         lines.insert(4, f"Код в списке: {_target_code_label(estimate)}")
+    note = _calculation_note(estimate)
+    if note:
+        insert_at = lines.index(f"Текущий проходной: {estimate.current_passing_score or 'нет данных'}") + 1
+        lines.insert(insert_at, note)
     return lines
 
 
@@ -128,6 +132,20 @@ def _target_code_label(estimate: AdmissionEstimate) -> str:
     if estimate.target_found is False:
         return f"{estimate.target_entrant_code} не найден"
     return f"{estimate.target_entrant_code} не проверен"
+
+
+def _calculation_note(estimate: AdmissionEstimate) -> str | None:
+    if estimate.source_status != SourceStatus.OK:
+        return None
+    scored = estimate.scored_rows_count
+    if scored is None or scored == estimate.rows_count:
+        return None
+    if scored < estimate.places:
+        return (
+            f"Расчет: позиция по {scored} строкам с баллами; "
+            f"для проходного нужно минимум {estimate.places}."
+        )
+    return f"Расчет: по {scored} строкам с баллами."
 
 
 def _source_label(estimate: AdmissionEstimate) -> str:

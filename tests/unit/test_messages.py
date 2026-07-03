@@ -46,6 +46,7 @@ def test_render_estimate_block_uses_raw_position_and_shows_scored_count() -> Non
 
     assert "Подано заявлений: 99 (с баллами: 7)" in block
     assert "Оценочная позиция: 5" in block
+    assert "Расчет: позиция по 7 строкам с баллами; для проходного нужно минимум 20." in block
     assert "Оценочная позиция: 2" not in block
 
 
