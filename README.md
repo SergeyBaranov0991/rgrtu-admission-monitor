@@ -26,6 +26,7 @@ Current implementation is the first MVP slice:
 python -m venv .venv
 . .venv/Scripts/activate
 pip install -e ".[dev]"
+python -m ruff check .
 pytest
 python -m app.cli check --score 195
 python -m app.cli check --score 195 --insecure

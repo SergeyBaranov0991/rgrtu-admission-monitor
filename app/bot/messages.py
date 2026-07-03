@@ -38,27 +38,36 @@ def render_estimate_block(estimate: AdmissionEstimate) -> list[str]:
     confidence = _confidence_label(estimate.confidence)
     preliminary = " (предварительно)" if estimate.preliminary else ""
     applications_count = _applications_count_label(estimate)
+    passing_score = _value_or_no_data(estimate.current_passing_score)
 
     lines = [
         f"{estimate.program_code} {estimate.program_name} - {funding}",
         f"Источник: {_source_label(estimate)}",
         f"Мест: {estimate.places}",
         f"Подано заявлений: {applications_count}",
-        f"Оценочная позиция: {position_text}",
-        f"Текущий проходной: {estimate.current_passing_score or 'нет данных'}",
-        f"Прогноз проходного: {forecast}{preliminary}",
-        f"Статус: {ZONE_LABELS[estimate.zone]}",
-        f"Достоверность: {confidence}",
     ]
     if estimate.target_entrant_code:
-        lines.insert(4, f"Код в списке: {_target_code_label(estimate)}")
+        lines.append(f"Код в списке: {_target_code_label(estimate)}")
+    lines.extend(
+        [
+            f"Оценочная позиция: {position_text}",
+            f"Текущий проходной: {passing_score}",
+        ]
+    )
+    if estimate.published_score_floor is not None:
+        lines.append(
+            f"Нижняя граница по опубликованным баллам: {estimate.published_score_floor}"
+        )
     note = _calculation_note(estimate)
     if note:
-        insert_at = lines.index(f"Текущий проходной: {estimate.current_passing_score or 'нет данных'}") + 1
-        lines.insert(insert_at, note)
-    if estimate.published_score_floor is not None:
-        insert_at = lines.index(f"Текущий проходной: {estimate.current_passing_score or 'нет данных'}") + 1
-        lines.insert(insert_at, f"Нижняя граница по опубликованным баллам: {estimate.published_score_floor}")
+        lines.append(note)
+    lines.extend(
+        [
+            f"Прогноз проходного: {forecast}{preliminary}",
+            f"Статус: {ZONE_LABELS[estimate.zone]}",
+            f"Достоверность: {confidence}",
+        ]
+    )
     return lines
 
 
@@ -89,6 +98,10 @@ def _interval(value: tuple[int, int] | None) -> str:
     if value[0] == value[1]:
         return str(value[0])
     return f"{value[0]}-{value[1]}"
+
+
+def _value_or_no_data(value: int | None) -> str:
+    return str(value) if value is not None else "нет данных"
 
 
 def _forecast_label(estimate: AdmissionEstimate) -> str:

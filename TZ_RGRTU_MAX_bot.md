@@ -1189,12 +1189,12 @@ rgrtu-max-bot/
 │   │   ├── commands.py
 │   │   ├── keyboards.py
 │   │   ├── messages.py
-│   │   └── max_client.py
+│   │   ├── max_client.py
+│   │   └── user_settings.py
 │   ├── rgrtu/
 │   │   ├── base.py
 │   │   ├── json_adapter.py
-│   │   ├── html_adapter.py
-│   │   ├── browser_adapter.py
+│   │   ├── livewire_adapter.py
 │   │   ├── parser.py
 │   │   └── discovery.py
 │   ├── admission/
@@ -1254,12 +1254,11 @@ services:
       timeout: 5s
       retries: 3
 
-  proxy:
+  caddy:
     image: caddy:2
     restart: unless-stopped
     ports:
-      - "80:80"
-      - "443:443"
+      - "127.0.0.1:${CADDY_HTTPS_HOST_PORT:-9443}:443"
     volumes:
       - ./Caddyfile:/etc/caddy/Caddyfile:ro
       - caddy_data:/data

@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from dataclasses import dataclass
 from datetime import date
 
 from pydantic import BaseModel
@@ -7,6 +8,16 @@ from pydantic import BaseModel
 from app.admission.ranking import RankInterval, effective_rows, passing_score, score_rank_interval
 from app.admission.zones import AdmissionZone
 from app.rgrtu.base import CompetitionList, SourceStatus
+
+
+OFFICIAL_LIST_DATE = date(2026, 7, 27)
+PRELIMINARY_FORECAST_SPREAD = 7
+FINAL_FORECAST_SPREAD = 4
+HIGH_CONFIDENCE_THRESHOLD = 0.75
+HIGH_CONFIDENCE_SPREAD_REDUCTION = 2
+MIN_HIGH_CONFIDENCE_SPREAD = 2
+DRAFT_PRELIMINARY_FORECAST_SPREAD = 15
+DRAFT_FINAL_FORECAST_SPREAD = 10
 
 
 class AdmissionEstimate(BaseModel):
@@ -32,6 +43,15 @@ class AdmissionEstimate(BaseModel):
     scored_rows_count: int | None = None
     target_entrant_code: str | None = None
     target_found: bool | None = None
+
+
+@dataclass(frozen=True)
+class PassingScoreEstimate:
+    has_complete_score_rows: bool
+    current_score: int | None
+    published_floor: int | None
+    forecast_score: tuple[int, int] | None
+    draft_forecast_score: tuple[int, int] | None
 
 
 def estimate_competition(
@@ -61,7 +81,7 @@ def estimate_competition(
             draft_forecast_score=None,
             zone=AdmissionZone.SOURCE_UNAVAILABLE,
             confidence=0.0,
-            preliminary=True,
+            preliminary=_is_preliminary(today),
             source_url=metadata.source_url,
             source_status=competition.source_status,
             source_error=_source_error(competition),
@@ -74,16 +94,17 @@ def estimate_competition(
     raw_interval = score_rank_interval(competition.rows, target_score)
     effective = effective_rows(competition.rows)
     effective_interval = score_rank_interval(effective, target_score)
-    has_complete_score_rows = scored_rows_count >= places
-    score_floor = passing_score(competition.rows, places)
-    current_passing = score_floor if has_complete_score_rows else None
 
-    preliminary = today < date(2026, 7, 27)
+    preliminary = _is_preliminary(today)
     confidence = _confidence(competition, scored_rows_count, preliminary)
-    position_for_zone = raw_interval if has_complete_score_rows else None
+    passing = _passing_score_estimate(
+        competition,
+        scored_rows_count=scored_rows_count,
+        confidence=confidence,
+        preliminary=preliminary,
+    )
+    position_for_zone = raw_interval if passing.has_complete_score_rows else None
     zone = _zone(position_for_zone, places)
-    forecast = _forecast(current_passing, confidence, preliminary)
-    draft_forecast = _draft_forecast(score_floor, preliminary) if not has_complete_score_rows else None
 
     return AdmissionEstimate(
         program_code=metadata.program_code,
@@ -94,10 +115,10 @@ def estimate_competition(
         target_score=target_score,
         raw_position=_as_tuple(raw_interval),
         effective_position=_as_tuple(effective_interval),
-        current_passing_score=current_passing,
-        forecast_passing_score=forecast,
-        published_score_floor=score_floor if not has_complete_score_rows else None,
-        draft_forecast_score=draft_forecast,
+        current_passing_score=passing.current_score,
+        forecast_passing_score=passing.forecast_score,
+        published_score_floor=passing.published_floor,
+        draft_forecast_score=passing.draft_forecast_score,
         zone=zone,
         confidence=confidence,
         preliminary=preliminary,
@@ -175,6 +196,31 @@ def _zone(interval: RankInterval | None, places: int) -> AdmissionZone:
     return AdmissionZone.NON_PASSING
 
 
+def _is_preliminary(today: date) -> bool:
+    return today < OFFICIAL_LIST_DATE
+
+
+def _passing_score_estimate(
+    competition: CompetitionList,
+    *,
+    scored_rows_count: int,
+    confidence: float,
+    preliminary: bool,
+) -> PassingScoreEstimate:
+    has_complete_score_rows = scored_rows_count >= competition.metadata.published_places
+    score_floor = passing_score(competition.rows, competition.metadata.published_places)
+    current_score = score_floor if has_complete_score_rows else None
+    return PassingScoreEstimate(
+        has_complete_score_rows=has_complete_score_rows,
+        current_score=current_score,
+        published_floor=None if has_complete_score_rows else score_floor,
+        forecast_score=_forecast(current_score, confidence, preliminary),
+        draft_forecast_score=(
+            None if has_complete_score_rows else _draft_forecast(score_floor, preliminary)
+        ),
+    )
+
+
 def _confidence(competition: CompetitionList, scored_rows_count: int, preliminary: bool) -> float:
     if not competition.rows:
         return 0.2
@@ -197,16 +243,16 @@ def _confidence(competition: CompetitionList, scored_rows_count: int, preliminar
 def _forecast(current_passing: int | None, confidence: float, preliminary: bool) -> tuple[int, int] | None:
     if current_passing is None:
         return None
-    spread = 7 if preliminary else 4
-    if confidence >= 0.75:
-        spread = max(2, spread - 2)
+    spread = PRELIMINARY_FORECAST_SPREAD if preliminary else FINAL_FORECAST_SPREAD
+    if confidence >= HIGH_CONFIDENCE_THRESHOLD:
+        spread = max(MIN_HIGH_CONFIDENCE_SPREAD, spread - HIGH_CONFIDENCE_SPREAD_REDUCTION)
     return (max(0, current_passing - spread), current_passing + spread)
 
 
 def _draft_forecast(score_floor: int | None, preliminary: bool) -> tuple[int, int] | None:
     if score_floor is None:
         return None
-    spread = 15 if preliminary else 10
+    spread = DRAFT_PRELIMINARY_FORECAST_SPREAD if preliminary else DRAFT_FINAL_FORECAST_SPREAD
     return (max(0, score_floor - spread), score_floor + spread)
 
 

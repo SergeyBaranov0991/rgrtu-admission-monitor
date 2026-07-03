@@ -1,9 +1,6 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from functools import lru_cache
-
-from sqlalchemy.orm import sessionmaker
 
 from app.bot.keyboards import (
     is_all_categories_request,
@@ -13,9 +10,9 @@ from app.bot.keyboards import (
     is_status_request,
 )
 from app.bot.messages import render_help, render_programs, render_status
+from app.bot.user_settings import UserSettingsStore
 from app.config import Settings, get_program
 from app.db.models import UserSettings
-from app.db.repositories import build_session_factory, get_or_create_user_settings, touch_user_settings
 from app.jobs.check_lists import estimate_from_live
 
 
@@ -28,7 +25,8 @@ class CommandContext:
 
 async def handle_command(context: CommandContext) -> str:
     text = context.text.strip()
-    user_settings = _load_user_settings(context)
+    store = UserSettingsStore(context.settings)
+    user_settings = store.load(context.user_id)
     is_control_text = (
         is_status_request(text)
         or is_search_by_score_request(text)
@@ -38,7 +36,7 @@ async def handle_command(context: CommandContext) -> str:
     )
 
     if user_settings is not None and user_settings.pending_action and not text.startswith("/") and not is_control_text:
-        return _handle_pending_input(user_settings, text, context.settings)
+        return _handle_pending_input(user_settings, text, store)
 
     if is_status_request(text):
         return await _render_current_status(context.settings, user_settings)
@@ -48,8 +46,7 @@ async def handle_command(context: CommandContext) -> str:
             return "Не удалось сохранить профиль: не определен пользователь."
         user_settings.search_profile = "score"
         user_settings.pending_action = "score"
-        touch_user_settings(user_settings)
-        _commit_user_settings(user_settings, context.settings)
+        store.save(user_settings)
         return (
             f"Профиль поиска: по баллу.\n"
             f"Текущий балл: {_user_total_score(user_settings)}.\n\n"
@@ -61,8 +58,7 @@ async def handle_command(context: CommandContext) -> str:
             return "Не удалось сохранить профиль: не определен пользователь."
         user_settings.search_profile = "code"
         user_settings.pending_action = "entrant_code"
-        touch_user_settings(user_settings)
-        _commit_user_settings(user_settings, context.settings)
+        store.save(user_settings)
         current = f"\nТекущий код: {user_settings.entrant_code}" if user_settings.entrant_code else ""
         return (
             f"Профиль поиска: по коду из сервиса приема.{current}\n\n"
@@ -74,8 +70,7 @@ async def handle_command(context: CommandContext) -> str:
             return "Не удалось сохранить режим: не определен пользователь."
         user_settings.category_scope = "general"
         user_settings.pending_action = None
-        touch_user_settings(user_settings)
-        _commit_user_settings(user_settings, context.settings)
+        store.save(user_settings)
         return "Режим категорий: только общий конкурс."
 
     if is_all_categories_request(text):
@@ -83,28 +78,27 @@ async def handle_command(context: CommandContext) -> str:
             return "Не удалось сохранить режим: не определен пользователь."
         user_settings.category_scope = "all"
         user_settings.pending_action = None
-        touch_user_settings(user_settings)
-        _commit_user_settings(user_settings, context.settings)
+        store.save(user_settings)
         return "Режим категорий: все категории."
 
     command, _, arg = text.partition(" ")
 
     if command in {"/start", "start"}:
-        return "Бот РГРТУ запущен.\n\n" + render_help() + "\n\n" + _render_settings(user_settings, context.settings)
+        return "Бот РГРТУ запущен.\n\n" + render_help() + "\n\n" + _render_settings(user_settings)
     if command == "/help":
         return render_help()
     if command == "/settings":
-        return _render_settings(user_settings, context.settings)
+        return _render_settings(user_settings)
     if command == "/programs":
         return render_programs()
     if command == "/score":
-        return _set_score(user_settings, arg, context.settings)
+        return _set_score(user_settings, arg, store)
     if command == "/code":
-        return _set_entrant_code(user_settings, arg, context.settings)
+        return _set_entrant_code(user_settings, arg, store)
     if command == "/scope":
-        return _set_scope(user_settings, arg, context.settings)
+        return _set_scope(user_settings, arg, store)
     if command == "/achievements":
-        return _set_achievements(user_settings, arg, context.settings)
+        return _set_achievements(user_settings, arg, store)
     if command == "/program":
         return await _render_program(arg, context.settings, user_settings)
     if command == "/history":
@@ -114,45 +108,17 @@ async def handle_command(context: CommandContext) -> str:
     return "Команда не распознана.\n\n" + render_help()
 
 
-def _load_user_settings(context: CommandContext) -> UserSettings | None:
-    if not context.user_id:
-        return None
-    session_factory = _session_factory(context.settings.database_url)
-    with session_factory() as session:
-        settings = get_or_create_user_settings(
-            session,
-            user_id=context.user_id,
-            default_score=context.settings.default_exam_score,
-            default_achievements=context.settings.individual_achievements,
-        )
-        session.expunge(settings)
-        return settings
-
-
-@lru_cache
-def _session_factory(database_url: str) -> sessionmaker:
-    return build_session_factory(database_url)
-
-
-def _commit_user_settings(settings: UserSettings, app_settings: Settings) -> None:
-    session_factory = _session_factory(app_settings.database_url)
-    with session_factory() as session:
-        merged = session.merge(settings)
-        touch_user_settings(merged)
-        session.commit()
-
-
-def _handle_pending_input(settings: UserSettings, text: str, app_settings: Settings) -> str:
+def _handle_pending_input(settings: UserSettings, text: str, store: UserSettingsStore) -> str:
     if settings.pending_action == "score":
-        return _set_score(settings, text, app_settings)
+        return _set_score(settings, text, store)
     if settings.pending_action == "entrant_code":
-        return _set_entrant_code(settings, text, app_settings)
+        return _set_entrant_code(settings, text, store)
     settings.pending_action = None
-    _commit_user_settings(settings, app_settings)
+    store.save(settings)
     return "Ожидаемое действие сброшено."
 
 
-def _set_score(settings: UserSettings | None, value: str, app_settings: Settings) -> str:
+def _set_score(settings: UserSettings | None, value: str, store: UserSettingsStore) -> str:
     if settings is None:
         return "Не удалось сохранить балл: не определен пользователь."
     try:
@@ -164,12 +130,11 @@ def _set_score(settings: UserSettings | None, value: str, app_settings: Settings
     settings.exam_score = score
     settings.search_profile = "score"
     settings.pending_action = None
-    touch_user_settings(settings)
-    _commit_user_settings(settings, app_settings)
+    store.save(settings)
     return f"Балл {score} сохранен. Текущий конкурсный балл: {_user_total_score(settings)}."
 
 
-def _set_achievements(settings: UserSettings | None, value: str, app_settings: Settings) -> str:
+def _set_achievements(settings: UserSettings | None, value: str, store: UserSettingsStore) -> str:
     if settings is None:
         return "Не удалось сохранить индивидуальные достижения: не определен пользователь."
     try:
@@ -180,12 +145,11 @@ def _set_achievements(settings: UserSettings | None, value: str, app_settings: S
         return "Индивидуальные достижения должны быть в диапазоне 0-10."
     settings.achievements = achievements
     settings.pending_action = None
-    touch_user_settings(settings)
-    _commit_user_settings(settings, app_settings)
+    store.save(settings)
     return f"Индивидуальные достижения {achievements} сохранены."
 
 
-def _set_entrant_code(settings: UserSettings | None, value: str, app_settings: Settings) -> str:
+def _set_entrant_code(settings: UserSettings | None, value: str, store: UserSettingsStore) -> str:
     if settings is None:
         return "Не удалось сохранить код: не определен пользователь."
     code = value.strip()
@@ -194,12 +158,11 @@ def _set_entrant_code(settings: UserSettings | None, value: str, app_settings: S
     settings.entrant_code = code
     settings.search_profile = "code"
     settings.pending_action = None
-    touch_user_settings(settings)
-    _commit_user_settings(settings, app_settings)
+    store.save(settings)
     return f"Код из сервиса приема {code} сохранен."
 
 
-def _set_scope(settings: UserSettings | None, value: str, app_settings: Settings) -> str:
+def _set_scope(settings: UserSettings | None, value: str, store: UserSettingsStore) -> str:
     if settings is None:
         return "Не удалось сохранить режим: не определен пользователь."
     normalized = value.strip().casefold()
@@ -210,8 +173,7 @@ def _set_scope(settings: UserSettings | None, value: str, app_settings: Settings
     else:
         return "Укажите режим: /scope general или /scope all"
     settings.pending_action = None
-    touch_user_settings(settings)
-    _commit_user_settings(settings, app_settings)
+    store.save(settings)
     return f"Режим категорий: {_category_scope_label(settings.category_scope)}."
 
 
@@ -278,7 +240,7 @@ def _entrant_code_for_status(settings: UserSettings | None) -> str | None:
     return settings.entrant_code
 
 
-def _render_settings(settings: UserSettings | None, app_settings: Settings) -> str:
+def _render_settings(settings: UserSettings | None) -> str:
     if settings is None:
         return "Настройки не сохранены: пользователь не определен."
     profile = "код из сервиса приема" if settings.search_profile == "code" else "балл"
