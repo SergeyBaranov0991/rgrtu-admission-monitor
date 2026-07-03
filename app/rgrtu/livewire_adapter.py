@@ -1,23 +1,22 @@
 from __future__ import annotations
 
-import asyncio
-import copy
 import hashlib
 import html
 import json
 import re
-from dataclasses import dataclass
 from typing import Any
 
 import httpx
-from bs4 import BeautifulSoup
 
 from app.config import PROGRAMS, ProgramConfig, Settings
 from app.rgrtu.base import CompetitionList, Funding, SourceStatus
-from app.rgrtu.parser import parse_competition_table_html
+from app.rgrtu.parser import parse_competition_payload, parse_competition_table_html
 
 
 COMPONENT_NAME = "competition-lists-common"
+BUDGET_COMPETITION_CODE = "04"
+PAID_COMPETITION_CODE = "06"
+INITIAL_DATA_RE = re.compile(r'wire:initial-data="([^"]*)"')
 LIVEWIRE_TOKEN_RE = re.compile(r"window\.livewire_token = '([^']+)'")
 
 
@@ -25,20 +24,13 @@ class SourceSchemaError(RuntimeError):
     """Raised when the public RGRTU page is reachable but its data shape is unexpected."""
 
 
-@dataclass(frozen=True)
-class LivewireInitialState:
-    page_url: str
-    token: str
-    component: dict[str, Any]
-
-
 class RgrtuLivewireListAdapter:
-    """Fetches public RGRTU entrant list pages through their Livewire endpoint."""
+    """Fetches public RGRTU competition lists from the overview Livewire payload."""
 
     def __init__(self, settings: Settings):
         self.settings = settings
         self.base_url = settings.rgrtu_base_url.rstrip("/")
-        self.page_url = f"{self.base_url}/guest/entrant-lists/{settings.rgrtu_campaign_id}"
+        self.page_url = f"{self.base_url}/guest/competition-lists/{settings.rgrtu_campaign_id}"
         self.endpoint_url = f"{self.base_url}/livewire/message/{COMPONENT_NAME}"
 
     async def fetch_tracked_competitions(self) -> list[CompetitionList]:
@@ -48,96 +40,127 @@ class RgrtuLivewireListAdapter:
             headers={"User-Agent": self.settings.user_agent},
             verify=self.settings.rgrtu_verify_ssl,
         ) as client:
-            initial = await self._load_initial_state(client)
+            response = await client.get(self.page_url)
+            response.raise_for_status()
+            component = extract_livewire_component(response.text)
+            memo_data = extract_livewire_memo_data(component)
+            competition_payloads = extract_competitions_from_memo(memo_data)
+
             competitions: list[CompetitionList] = []
             for program in PROGRAMS:
-                competitions.append(
-                    await self._fetch_filtered_competition(client, initial, program, Funding.BUDGET)
-                )
-                await asyncio.sleep(0.2)
-                competitions.append(
-                    await self._fetch_filtered_competition(client, initial, program, Funding.PAID)
-                )
-                await asyncio.sleep(0.2)
+                for funding in (Funding.BUDGET, Funding.PAID):
+                    competitions.append(
+                        self._build_tracked_competition(competition_payloads, program, funding)
+                    )
             return competitions
 
-    async def _load_initial_state(self, client: httpx.AsyncClient) -> LivewireInitialState:
-        response = await client.get(self.page_url)
-        response.raise_for_status()
-        token = extract_livewire_token(response.text)
-        component = extract_livewire_component(response.text)
-        return LivewireInitialState(page_url=str(response.url), token=token, component=component)
-
-    async def _fetch_filtered_competition(
+    def _build_tracked_competition(
         self,
-        client: httpx.AsyncClient,
-        initial: LivewireInitialState,
+        competition_payloads: list[dict[str, Any]],
         program: ProgramConfig,
         funding: Funding,
     ) -> CompetitionList:
-        if program.subject_id is None:
+        try:
+            payload = select_tracked_competition(competition_payloads, program, funding)
+            competition_id = str(payload["id"])
+        except (KeyError, SourceSchemaError) as exc:
             competition = build_empty_competition(
                 program=program,
                 funding=funding,
                 campaign_id=self.settings.rgrtu_campaign_id,
                 source_url=self._source_url(program, funding),
-                raw={"error": "subject_id is not configured"},
+                raw={"error": str(exc)},
             )
             competition.source_status = SourceStatus.SCHEMA_CHANGED
             return competition
 
-        component = copy.deepcopy(initial.component)
-        payload = {
-            "fingerprint": component["fingerprint"],
-            "serverMemo": component["serverMemo"],
-            "updates": build_filter_updates(program.subject_id, funding),
-        }
-        response = await client.post(
-            self.endpoint_url,
-            headers={
-                "Content-Type": "application/json",
-                "Accept": "text/html, application/xhtml+xml",
-                "X-Livewire": "true",
-                "X-CSRF-TOKEN": initial.token,
-                "Referer": initial.page_url,
-            },
-            json=payload,
-        )
-        response.raise_for_status()
-        try:
-            data = response.json()
-        except json.JSONDecodeError as exc:
-            raise SourceSchemaError("Livewire response is not valid JSON") from exc
-
-        response_html = extract_livewire_response_html(data)
-        memo_data = extract_livewire_memo_data(data)
-        competition = parse_competition_table_html(
-            response_html,
+        return parse_competition_payload(
+            payload,
             program_code=program.code,
             program_name=program.name,
             funding_type=funding,
             places=program.general_places if funding == Funding.BUDGET else program.paid_places,
-            source_url=self._source_url(program, funding),
+            source_url=self._competition_source_url(competition_id),
+            campaign_id=self.settings.rgrtu_campaign_id,
         )
-        competition.metadata.campaign_id = self.settings.rgrtu_campaign_id
-        competition.raw = {
-            "page_url": initial.page_url,
-            "endpoint_url": self.endpoint_url,
-            "program_subject_id": program.subject_id,
-            "funding": funding.value,
-            "livewire_server_memo_keys": sorted(memo_data.keys()),
-            "livewire_competitions_count": len(memo_data.get("competitions") or []),
-        }
-        return competition
 
     def _source_url(self, program: ProgramConfig, funding: Funding) -> str:
-        funding_code = "04" if funding == Funding.BUDGET else "06"
+        funding_code = competition_code_for_funding(funding)
         return (
             f"{self.page_url}"
             f"?subject={program.subject_id or ''}"
             f"&study_form=full_time"
             f"&competition_type={funding_code}"
         )
+
+    def _competition_source_url(self, competition_id: str) -> str:
+        return f"{self.page_url}/{competition_id}"
+
+
+def extract_competitions_from_memo(memo_data: dict[str, Any]) -> list[dict[str, Any]]:
+    competitions = memo_data.get("competitions")
+    if not isinstance(competitions, list):
+        raise SourceSchemaError("Livewire memo does not contain competitions")
+    if not all(isinstance(item, dict) for item in competitions):
+        raise SourceSchemaError("Livewire competitions payload has unexpected items")
+    return competitions
+
+
+def select_tracked_competition(
+    competitions: list[dict[str, Any]],
+    program: ProgramConfig,
+    funding: Funding,
+) -> dict[str, Any]:
+    competition_code = competition_code_for_funding(funding)
+    places = program.general_places if funding == Funding.BUDGET else program.paid_places
+    candidates = [
+        competition
+        for competition in competitions
+        if _matches_program(competition, program)
+        and str(competition.get("code") or "") == competition_code
+        and str(competition.get("eduProgramFormCode") or "") == "1"
+    ]
+    exact_place_candidates = [
+        competition for competition in candidates if _int_or_none(competition.get("plan")) == places
+    ]
+    selected = exact_place_candidates or candidates
+    if len(selected) != 1:
+        raise SourceSchemaError(
+            f"Expected one competition for {program.code}/{funding.value}, found {len(selected)}"
+        )
+    return selected[0]
+
+
+def competition_code_for_funding(funding: Funding) -> str:
+    return BUDGET_COMPETITION_CODE if funding == Funding.BUDGET else PAID_COMPETITION_CODE
+
+
+def _matches_program(competition: dict[str, Any], program: ProgramConfig) -> bool:
+    title = str(competition.get("programSetPrintTitle") or "")
+    if title.startswith(program.code):
+        return True
+    edu_programs = competition.get("eduPrograms")
+    if not isinstance(edu_programs, list):
+        return False
+    return any(
+        isinstance(item, dict)
+        and str(item.get("fullTitleWithoutSubjectIndex") or "").startswith(program.code)
+        for item in edu_programs
+    )
+
+
+def _int_or_none(value: Any) -> int | None:
+    if value is None or isinstance(value, bool):
+        return None
+    if isinstance(value, int):
+        return value
+    digits = "".join(ch for ch in str(value) if ch.isdigit())
+    if not digits:
+        return None
+    try:
+        return int(digits)
+    except ValueError:
+        return None
 
 
 def extract_livewire_token(page_html: str) -> str:
@@ -148,11 +171,10 @@ def extract_livewire_token(page_html: str) -> str:
 
 
 def extract_livewire_component(page_html: str, component_name: str = COMPONENT_NAME) -> dict[str, Any]:
-    soup = BeautifulSoup(page_html, "lxml")
-    for element in soup.select("[wire\\:initial-data]"):
+    for match in INITIAL_DATA_RE.finditer(page_html):
         try:
-            data = json.loads(html.unescape(element["wire:initial-data"]))
-        except (KeyError, json.JSONDecodeError):
+            data = json.loads(html.unescape(match.group(1)))
+        except json.JSONDecodeError:
             continue
         if data.get("fingerprint", {}).get("name") == component_name:
             return data

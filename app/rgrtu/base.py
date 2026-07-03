@@ -55,6 +55,8 @@ class CompetitionMetadata(BaseModel):
     funding_type: Funding
     admission_basis: str = "general"
     published_places: int
+    applications_count: int | None = None
+    withdrawn_count: int | None = None
     general_competition_places: int | None = None
     paid_places: int | None = None
     list_updated_at: datetime | None = None
@@ -74,4 +76,3 @@ class ProgramBundle(BaseModel):
     program_code: str
     budget: CompetitionList | None = None
     paid: CompetitionList | None = None
-

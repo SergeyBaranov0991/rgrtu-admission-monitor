@@ -1,13 +1,15 @@
 # RGRTU Source Discovery
 
-Checked on 2026-06-29.
+Checked on 2026-07-03.
 
 ## Public access
 
 - `https://postupai.rsreu.ru/robots.txt` returns `User-agent: *` and empty `Disallow`.
 - `https://postupai.rsreu.ru/guest/competition-lists/20` returns HTTP 200 without auth.
 - The page is a Laravel Livewire interface. The static HTML contains the component
-  `competition-lists-common` and the subject dictionary.
+  `competition-lists-common`, the subject dictionary, and the `competitions` payload.
+- Concrete public lists are available as
+  `https://postupai.rsreu.ru/guest/competition-lists/20/{competition_id}`.
 
 ## Campaign and subject ids observed
 
@@ -25,17 +27,16 @@ Tracked subjects:
 
 ## Adapter decision
 
-Primary adapter for the first implementation is Livewire discovery plus a swappable competition
-fetcher. The initial HTML reliably exposes subject ids, but exact list-card and row requests still
-need a browser Network capture after selecting:
+Primary adapter reads the initial `competition-lists-common` payload from
+`/guest/competition-lists/20`. For each tracked program it selects the очная competition by:
 
-1. subject id;
-2. `eduProgramForms` = очная;
-3. `competitionTypes` = общий конкурс or по договору.
+1. direction code;
+2. competition code `04` for общий конкурс or `06` for по договору;
+3. configured number of places, which disambiguates profiles with the same direction code.
 
-The code therefore keeps RGRTU fetching isolated in `app/rgrtu/` and starts with fixture-backed
-parser tests. Browser fallback is intentionally blocked until a concrete Network request is
-documented.
+The selected payload contains official `submitted` and `taken` counters plus entrant rows. The bot
+uses `submitted` for `Подано заявлений` so source failures are distinct from a real zero. Direct
+competition URLs are kept as `source_url` values for diagnostics and manual checks.
 
 ## Load limits
 
@@ -43,4 +44,3 @@ documented.
 - User-Agent identifies the monitor.
 - Scheduler interval: 120 minutes.
 - No CAPTCHA bypass, no authenticated session reuse, no personal data storage.
-

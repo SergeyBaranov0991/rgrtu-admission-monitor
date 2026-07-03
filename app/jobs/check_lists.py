@@ -54,11 +54,12 @@ def unavailable_competitions(
     base_url = settings.rgrtu_base_url.rstrip("/")
     for program in PROGRAMS:
         for funding in (Funding.BUDGET, Funding.PAID):
+            competition_type = "04" if funding == Funding.BUDGET else "06"
             source_url = (
-                f"{base_url}/guest/entrant-lists/{settings.rgrtu_campaign_id}"
+                f"{base_url}/guest/competition-lists/{settings.rgrtu_campaign_id}"
                 f"?subject={program.subject_id or ''}"
                 f"&study_form=full_time"
-                f"&competition_type={'04' if funding == Funding.BUDGET else '06'}"
+                f"&competition_type={competition_type}"
             )
             competition = build_empty_competition(
                 program=program,

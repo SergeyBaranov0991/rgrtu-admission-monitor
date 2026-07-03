@@ -1,6 +1,7 @@
 import pytest
 
 from app.config import PROGRAMS
+from app.admission.estimator import estimate_competition
 from app.rgrtu.base import Funding
 from app.rgrtu.livewire_adapter import (
     SourceSchemaError,
@@ -9,8 +10,9 @@ from app.rgrtu.livewire_adapter import (
     extract_livewire_component,
     extract_livewire_response_html,
     extract_livewire_token,
+    select_tracked_competition,
 )
-from app.rgrtu.parser import parse_competition_table_html
+from app.rgrtu.parser import parse_competition_payload, parse_competition_table_html
 
 
 def test_extract_livewire_initial_state() -> None:
@@ -49,12 +51,83 @@ def test_build_filter_updates_uses_public_ui_checkbox_values() -> None:
     assert paid_updates[2]["payload"]["name"] == "competitionTypes.4.checked"
 
 
+def test_select_tracked_competition_uses_places_to_disambiguate_profiles() -> None:
+    program = next(program for program in PROGRAMS if program.code == "09.03.02")
+    competitions = [
+        {
+            "id": "wrong-profile",
+            "programSetPrintTitle": "09.03.02 Информационные системы и технологии",
+            "code": "04",
+            "eduProgramFormCode": "1",
+            "plan": 7,
+        },
+        {
+            "id": "tracked-profile",
+            "programSetPrintTitle": "09.03.02 Информационные системы и технологии",
+            "code": "04",
+            "eduProgramFormCode": "1",
+            "plan": 19,
+        },
+    ]
+
+    selected = select_tracked_competition(competitions, program, Funding.BUDGET)
+
+    assert selected["id"] == "tracked-profile"
+
+
+def test_competition_payload_keeps_official_applications_count() -> None:
+    payload = {
+        "id": "1863247416534381847",
+        "code": "04",
+        "type": "Общий конкурс",
+        "programSetPrintTitle": "01.03.02 Прикладная математика и информатика",
+        "plan": 10,
+        "submitted": 141,
+        "taken": 0,
+        "entrants": [
+            {
+                "firstRating": 1,
+                "superServiceCode": "1043871",
+                "name": "Не сохраняется",
+                "email": "hidden@example.test",
+                "snils": "000-000-000 00",
+                "finalMark": "276",
+                "entranceMark": "276",
+                "achievementMark": "0",
+                "printPriority": 5,
+                "isAccepted": False,
+                "isOriginalIn": False,
+                "status": "Участвует в конкурсе",
+            }
+        ],
+    }
+
+    competition = parse_competition_payload(
+        payload,
+        program_code="01.03.02",
+        program_name="Прикладная математика и информатика",
+        funding_type=Funding.BUDGET,
+        places=10,
+        source_url="https://postupai.rsreu.ru/guest/competition-lists/20/1863247416534381847",
+        campaign_id=20,
+    )
+    estimate = estimate_competition(competition, 195)
+
+    assert competition.metadata.applications_count == 141
+    assert len(competition.rows) == 1
+    assert estimate.rows_count == 141
+    assert competition.rows[0].anonymous_applicant_id == "1043871"
+    assert competition.rows[0].total_score == 276
+    assert "hidden@example.test" not in str(competition.raw)
+    assert "000-000-000" not in str(competition.raw)
+
+
 def test_build_empty_competition_keeps_application_count_zero() -> None:
     competition = build_empty_competition(
         program=PROGRAMS[0],
         funding=Funding.BUDGET,
         campaign_id=20,
-        source_url="https://postupai.rsreu.ru/guest/entrant-lists/20",
+        source_url="https://postupai.rsreu.ru/guest/competition-lists/20",
     )
 
     assert competition.metadata.campaign_id == 20
@@ -70,7 +143,7 @@ def test_table_parser_does_not_use_position_as_score() -> None:
         program_name=PROGRAMS[0].name,
         funding_type=Funding.BUDGET,
         places=PROGRAMS[0].general_places,
-        source_url="https://postupai.rsreu.ru/guest/entrant-lists/20",
+        source_url="https://postupai.rsreu.ru/guest/competition-lists/20",
     )
 
     assert competition.rows[0].position == 1

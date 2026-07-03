@@ -14,7 +14,7 @@ Current implementation is the first MVP slice:
 - independent Telegram long-polling worker for faster testing;
 - command handling skeleton;
 - admission rank interval and zone estimation;
-- live RGRTU public-list check through the official Livewire endpoint;
+- live RGRTU public-list check through the official competition-list page payload;
 - RGRTU Livewire subject discovery;
 - Docker Compose and operational docs.
 
@@ -91,10 +91,13 @@ This binds only `127.0.0.1:8030` on the host and does not touch the existing rev
 
 The bot reads current public data from:
 
-- public page: <https://postupai.rsreu.ru/guest/entrant-lists/20>
-- Livewire endpoint used by that page: <https://postupai.rsreu.ru/livewire/message/competition-lists-common>
-- subject discovery page: <https://postupai.rsreu.ru/guest/competition-lists/20>
+- public competition overview page: <https://postupai.rsreu.ru/guest/competition-lists/20>
+- Livewire component embedded in that page: `competition-lists-common`
+- direct competition pages selected from `competitions[].id`, for example:
+  <https://postupai.rsreu.ru/guest/competition-lists/20/1863247416534381847>
 
 `RGRTU_CAMPAIGN_ID` controls the campaign id. The current value `20` is the RGRTU
-`Бакалавриат и специалитет 2026/2027` campaign. Local Windows checks may need `--insecure`
-if TLS verification is intercepted; Docker trusts the bundled Russian CA chain.
+`Бакалавриат и специалитет 2026/2027` campaign. The overview payload contains the official
+`submitted` counter used for `Подано заявлений`, while entrant rows are sanitized before internal
+use. Local Windows checks may need `--insecure` if TLS verification is intercepted; Docker trusts
+the bundled Russian CA chain.

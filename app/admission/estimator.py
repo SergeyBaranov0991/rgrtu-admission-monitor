@@ -39,6 +39,7 @@ def estimate_competition(
     places = metadata.published_places
 
     if competition.source_status != SourceStatus.OK:
+        rows_count = _applications_count(competition)
         return AdmissionEstimate(
             program_code=metadata.program_code,
             program_name=metadata.program_name,
@@ -55,9 +56,10 @@ def estimate_competition(
             source_url=metadata.source_url,
             source_status=competition.source_status,
             source_error=_source_error(competition),
-            rows_count=len(competition.rows),
+            rows_count=rows_count,
         )
 
+    rows_count = _applications_count(competition)
     raw_interval = score_rank_interval(competition.rows, target_score)
     effective = effective_rows(competition.rows)
     effective_interval = score_rank_interval(effective, target_score)
@@ -85,7 +87,7 @@ def estimate_competition(
         source_url=metadata.source_url,
         source_status=competition.source_status,
         source_error=_source_error(competition),
-        rows_count=len(competition.rows),
+        rows_count=rows_count,
     )
 
 
@@ -132,3 +134,9 @@ def _source_error(competition: CompetitionList) -> str | None:
     if error is None:
         return None
     return str(error)
+
+
+def _applications_count(competition: CompetitionList) -> int:
+    if competition.metadata.applications_count is not None:
+        return competition.metadata.applications_count
+    return len(competition.rows)
