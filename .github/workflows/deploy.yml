@@ -85,9 +85,10 @@ jobs:
 
       - name: Deploy Telegram bot
         if: steps.deploy_key.outputs.configured == 'true'
+        timeout-minutes: 10
         run: |
           ssh "${DEPLOY_USER}@${DEPLOY_HOST}" \
-            "cd '${DEPLOY_PATH}' && docker compose -p rgrtu-tg-bot -f docker-compose.tg.yml up -d --build --force-recreate"
+            "cd '${DEPLOY_PATH}' && timeout 8m docker compose -p rgrtu-tg-bot -f docker-compose.tg.yml up -d --build --force-recreate"
 
       - name: Verify Telegram bot
         if: steps.deploy_key.outputs.configured == 'true'
@@ -97,9 +98,10 @@ jobs:
 
       - name: Deploy MAX bot
         if: steps.deploy_key.outputs.configured == 'true'
+        timeout-minutes: 10
         run: |
           ssh "${DEPLOY_USER}@${DEPLOY_HOST}" \
-            "cd '${DEPLOY_MAX_PATH}' && docker compose -p rgrtu-max-bot -f docker-compose.yml up -d --build --force-recreate --remove-orphans"
+            "cd '${DEPLOY_MAX_PATH}' && timeout 8m docker compose -p rgrtu-max-bot -f docker-compose.yml up -d --build --force-recreate --remove-orphans"
 
       - name: Verify MAX bot
         if: steps.deploy_key.outputs.configured == 'true'
