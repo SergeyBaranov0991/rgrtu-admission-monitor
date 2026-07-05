@@ -31,6 +31,11 @@ def main() -> None:
         action="store_true",
         help="Estimate with higher-priority filtering",
     )
+    check.add_argument(
+        "--debug",
+        action="store_true",
+        help="Print detailed calculation output",
+    )
     check.add_argument("--fixture", type=Path, default=None)
     check.add_argument(
         "--insecure",
@@ -75,6 +80,7 @@ def main() -> None:
                 score=score,
                 entrant_code=args.code,
                 relative=args.relative,
+                debug=args.debug,
                 tz=settings.timezone,
             )
         )

@@ -79,5 +79,31 @@ async def test_relative_status_button_uses_relative_estimate(tmp_path, monkeypat
         CommandContext(user_id="tg:123", text=RELATIVE_STATUS_BUTTON_TEXT, settings=settings)
     )
 
-    assert "Режим расчета: с учетом приоритетов" in reply
+    assert "Режим расчета: с учетом приоритетов" not in reply
+    assert calls[0]["kwargs"]["relative"] is True
+
+
+async def test_debug_command_toggles_detailed_status(tmp_path, monkeypatch) -> None:
+    settings = _settings(tmp_path)
+    calls: list[dict] = []
+
+    async def fake_estimate_from_live(*args, **kwargs) -> list:
+        calls.append({"args": args, "kwargs": kwargs})
+        return []
+
+    monkeypatch.setattr(commands, "estimate_from_live", fake_estimate_from_live)
+
+    enabled = await handle_command(CommandContext(user_id="tg:123", text="/debug on", settings=settings))
+    detailed = await handle_command(
+        CommandContext(user_id="tg:123", text=RELATIVE_STATUS_BUTTON_TEXT, settings=settings)
+    )
+    disabled = await handle_command(CommandContext(user_id="tg:123", text="/debug off", settings=settings))
+    compact = await handle_command(
+        CommandContext(user_id="tg:123", text=RELATIVE_STATUS_BUTTON_TEXT, settings=settings)
+    )
+
+    assert "Подробный режим включен" in enabled
+    assert "Режим расчета: с учетом приоритетов" in detailed
+    assert "Подробный режим выключен" in disabled
+    assert "Режим расчета: с учетом приоритетов" not in compact
     assert calls[0]["kwargs"]["relative"] is True

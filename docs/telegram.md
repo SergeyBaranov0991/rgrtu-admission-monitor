@@ -20,6 +20,10 @@ The reply keyboard includes both status modes:
 - `Актуальный относительный статус` filters applicants that already pass by a higher priority within
   the selected category scope.
 
+Status replies are compact by default. Send `/debug` to toggle detailed output for the current chat;
+send `/debug on` or `/debug off` to set it explicitly. Detailed output includes source status,
+scored-row counts, calculation notes, priority-filter details, and forecast fields.
+
 Changes pushed to `main` run lint/tests and recreate the TG container through the deploy workflow.
 
 ## VPS side-by-side run

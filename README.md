@@ -34,6 +34,7 @@ pytest
 python -m app.cli check --score 195
 python -m app.cli check --score 195 --relative
 python -m app.cli check --code 1158236 --relative
+python -m app.cli check --code 1158236 --relative --debug
 python -m app.cli check --score 195 --insecure
 python -m app.cli check --score 195 --fixture tests/fixtures/rgrtu/competition_list_full.json
 python -m app.cli discover
@@ -54,7 +55,7 @@ Actions.
 ## Code Structure
 
 - `app.bot.commands` routes user commands and button text.
-- `app.bot.user_settings` loads and saves per-chat score/code/category settings.
+- `app.bot.user_settings` loads and saves per-chat score/code/category/debug settings.
 - `app.bot.messages` renders human-readable MAX/Telegram responses.
 - `app.admission.estimator` computes rank, passing-score, confidence, and forecast fields.
 - `app.admission.relative` builds priority-aware competition lists for relative status.
@@ -84,7 +85,13 @@ Text commands are also supported:
 /scope general
 /scope all
 /settings
+/debug
 ```
+
+Status responses are compact by default. `/debug` toggles detailed responses for the current chat;
+when enabled, status output includes source status, scored-row counts, calculation notes,
+priority-filter details, and forecast fields. The CLI uses the same split: add `--debug` to print
+the detailed form.
 
 GitHub Actions deployment uses the production host/path from
 [.github/workflows/deploy.yml](.github/workflows/deploy.yml). It needs this repository secret:
@@ -137,4 +144,5 @@ the bundled Russian CA chain.
 Relative status uses the same loaded competitions as the current category scope. A row with priority
 `2..5` is excluded from a lower-priority list only when the same application code is confidently
 passing in a higher-priority list. Ties on the passing boundary are kept in the lower-priority list
-unless the whole equal-score interval fits into the available places.
+unless the whole equal-score interval fits into the available places. The compact chat response only
+shows the result; `/help` and `/debug` expose the calculation details.

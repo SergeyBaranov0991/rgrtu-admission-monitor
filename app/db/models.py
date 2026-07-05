@@ -24,6 +24,7 @@ class UserSettings(Base):
     search_profile: Mapped[str] = mapped_column(String(16), default="score")
     entrant_code: Mapped[str | None] = mapped_column(String(32))
     category_scope: Mapped[str] = mapped_column(String(16), default="general")
+    debug_enabled: Mapped[int] = mapped_column(Integer, default=0)
     pending_action: Mapped[str | None] = mapped_column(String(32))
     notifications_enabled: Mapped[int] = mapped_column(Integer, default=1)
     paid_enabled: Mapped[int] = mapped_column(Integer, default=1)

@@ -109,7 +109,7 @@ async def handle_command(context: CommandContext) -> str:
     if command == "/history":
         return "История событий будет доступна после подключения БД snapshots."
     if command == "/debug":
-        return "Приложение: OK\nРГРТУ: discovery adapter\nMAX: client configured"
+        return _set_debug(user_settings, arg, store)
     return "Команда не распознана.\n\n" + render_help()
 
 
@@ -182,6 +182,25 @@ def _set_scope(settings: UserSettings | None, value: str, store: UserSettingsSto
     return f"Режим категорий: {_category_scope_label(settings.category_scope)}."
 
 
+def _set_debug(settings: UserSettings | None, value: str, store: UserSettingsStore) -> str:
+    if settings is None:
+        return "Не удалось сохранить debug-режим: не определен пользователь."
+    normalized = value.strip().casefold()
+    if normalized in {"on", "1", "true", "yes", "вкл", "включить", "включен"}:
+        enabled = True
+    elif normalized in {"off", "0", "false", "no", "выкл", "выключить", "выключен"}:
+        enabled = False
+    else:
+        enabled = not _debug_enabled(settings)
+
+    settings.debug_enabled = 1 if enabled else 0
+    settings.pending_action = None
+    store.save(settings)
+    if enabled:
+        return "Подробный режим включен. Следующий статус покажет источник, расчет, фильтрацию и прогноз."
+    return "Подробный режим выключен. Следующий статус будет компактным."
+
+
 async def _render_current_status(
     settings: Settings,
     user_settings: UserSettings | None,
@@ -206,6 +225,7 @@ async def _render_current_status(
         entrant_code=entrant_code,
         category_scope=scope,
         relative=relative,
+        debug=_debug_enabled(user_settings),
         tz=settings.timezone,
     )
 
@@ -227,7 +247,14 @@ async def _render_program(code: str, settings: Settings, user_settings: UserSett
         )
         if estimate.program_code == program.code
     ]
-    return render_status(estimates, score=score, entrant_code=entrant_code, category_scope=scope, tz=settings.timezone)
+    return render_status(
+        estimates,
+        score=score,
+        entrant_code=entrant_code,
+        category_scope=scope,
+        debug=_debug_enabled(user_settings),
+        tz=settings.timezone,
+    )
 
 
 def _score_for_status(settings: Settings, user_settings: UserSettings | None) -> int:
@@ -252,11 +279,16 @@ def _entrant_code_for_status(settings: UserSettings | None) -> str | None:
     return settings.entrant_code
 
 
+def _debug_enabled(settings: UserSettings | None) -> bool:
+    return bool(settings and settings.debug_enabled)
+
+
 def _render_settings(settings: UserSettings | None) -> str:
     if settings is None:
         return "Настройки не сохранены: пользователь не определен."
     profile = "код из сервиса приема" if settings.search_profile == "code" else "балл"
     code = settings.entrant_code or "не задан"
+    debug = "включен" if _debug_enabled(settings) else "выключен"
     return "\n".join(
         [
             "Текущие настройки:",
@@ -264,6 +296,7 @@ def _render_settings(settings: UserSettings | None) -> str:
             f"Балл: {_user_total_score(settings)}",
             f"Код из сервиса приема: {code}",
             f"Режим категорий: {_category_scope_label(_category_scope(settings))}",
+            f"Подробный режим: {debug}",
             "",
             "Кнопки ниже позволяют изменить профиль и режим.",
         ]

@@ -37,6 +37,7 @@ def get_or_create_user_settings(
         achievements=default_achievements,
         search_profile="score",
         category_scope="general",
+        debug_enabled=0,
     )
     session.add(settings)
     session.commit()
@@ -55,6 +56,7 @@ def _ensure_sqlite_user_settings_columns(engine) -> None:
         "search_profile": "ALTER TABLE user_settings ADD COLUMN search_profile VARCHAR(16) DEFAULT 'score'",
         "entrant_code": "ALTER TABLE user_settings ADD COLUMN entrant_code VARCHAR(32)",
         "category_scope": "ALTER TABLE user_settings ADD COLUMN category_scope VARCHAR(16) DEFAULT 'general'",
+        "debug_enabled": "ALTER TABLE user_settings ADD COLUMN debug_enabled INTEGER DEFAULT 0",
         "pending_action": "ALTER TABLE user_settings ADD COLUMN pending_action VARCHAR(32)",
     }
     with engine.begin() as connection:

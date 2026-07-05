@@ -21,7 +21,7 @@ def test_render_estimate_block_includes_application_count() -> None:
         rows_count=21,
     )
 
-    assert "Подано заявлений: 21" in render_estimate_block(estimate)
+    assert "Мест: 19; заявлений: 21" in render_estimate_block(estimate)
 
 
 def test_render_estimate_block_uses_raw_position_and_shows_scored_count() -> None:
@@ -44,7 +44,7 @@ def test_render_estimate_block_uses_raw_position_and_shows_scored_count() -> Non
         scored_rows_count=7,
     )
 
-    block = render_estimate_block(estimate)
+    block = render_estimate_block(estimate, debug=True)
 
     assert "Подано заявлений: 99 (с баллами: 7)" in block
     assert "Оценочная позиция: 5" in block
@@ -76,7 +76,7 @@ def test_render_estimate_block_shows_category_and_code_status() -> None:
         target_found=True,
     )
 
-    block = render_estimate_block(estimate)
+    block = render_estimate_block(estimate, debug=True)
 
     assert block[0] == "01.03.02 Прикладная математика и информатика - бюджет, Отдельная квота"
     assert "Код в списке: 1158236 найден" in block
@@ -103,7 +103,7 @@ def test_render_estimate_block_distinguishes_real_zero_applications() -> None:
     block = render_estimate_block(estimate)
 
     assert "Источник: данные получены, заявлений нет" in block
-    assert "Подано заявлений: 0" in block
+    assert "Мест: 19; заявлений: 0" in block
 
 
 def test_render_estimate_block_does_not_show_zero_for_source_error() -> None:
@@ -127,8 +127,8 @@ def test_render_estimate_block_does_not_show_zero_for_source_error() -> None:
     block = render_estimate_block(estimate)
 
     assert "Источник: ошибка получения данных РГРТУ" in block
-    assert "Подано заявлений: не определено" in block
-    assert "Подано заявлений: 0" not in block
+    assert "Заявлений: не определено" in block
+    assert "заявлений: 0" not in block
 
 
 def test_render_estimate_block_shows_parse_error() -> None:
@@ -185,9 +185,54 @@ def test_render_relative_status_and_exclusion_note() -> None:
     )
 
     assert "РГРТУ - относительный статус" in status
+    assert "Режим расчета: с учетом приоритетов" not in status
+    assert "Мест: 20; заявлений: 99" in status
+    assert "Код: найден" in status
+    assert "Код: 1158236 найден" not in status
+    assert "Учитывается после приоритетов: 12" not in status
+    assert "Приоритет: 2" in status
+    assert "Позиция: не учитывается" in status
+    assert "Причина: проходит выше по приоритету в 01.03.02" in status
+    assert "Статус: проходит выше по приоритету" in status
+    assert "Относительный расчет:" not in status
+
+
+def test_render_relative_status_debug_keeps_details() -> None:
+    estimate = AdmissionEstimate(
+        program_code="09.03.03",
+        program_name="Прикладная информатика",
+        funding_type="budget",
+        places=20,
+        target_score=195,
+        raw_position=None,
+        effective_position=None,
+        current_passing_score=183,
+        forecast_passing_score=(176, 190),
+        zone=AdmissionZone.HIGHER_PRIORITY,
+        confidence=0.6,
+        preliminary=True,
+        rows_count=99,
+        scored_rows_count=20,
+        target_entrant_code="1158236",
+        target_found=True,
+        target_priority=2,
+        ranking_mode="relative",
+        relative_rows_count=12,
+        relative_excluded_by="01.03.02 Прикладная математика и информатика - бюджет",
+    )
+
+    status = render_status(
+        [estimate],
+        score=195,
+        entrant_code="1158236",
+        category_scope="general",
+        relative=True,
+        debug=True,
+    )
+
     assert "Режим расчета: с учетом приоритетов" in status
     assert "Подано заявлений: 99 (с баллами после фильтрации: 20)" in status
     assert "Учитывается после приоритетов: 12" in status
     assert "Приоритет в списке: 2" in status
     assert "Относительная позиция: не учитывается" in status
-    assert "Статус: проходит выше по приоритету" in status
+    assert "Относительный расчет:" in status

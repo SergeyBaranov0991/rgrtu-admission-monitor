@@ -15,6 +15,7 @@ def render_status(
     entrant_code: str | None = None,
     category_scope: str = "general",
     relative: bool = False,
+    debug: bool = False,
     tz: str = "Europe/Moscow",
 ) -> str:
     now = datetime.now(ZoneInfo(tz)).strftime("%d.%m.%Y %H:%M")
@@ -22,18 +23,31 @@ def render_status(
     lines = [
         f"{title} на {now} МСК",
         _profile_label(score=score, entrant_code=entrant_code),
-        f"Режим категорий: {_category_scope_label(category_scope)}",
-        f"Режим расчета: {_calculation_mode_label(relative)}",
-        "",
     ]
+    if debug:
+        lines.extend(
+            [
+                f"Режим категорий: {_category_scope_label(category_scope)}",
+                f"Режим расчета: {_calculation_mode_label(relative)}",
+                "",
+            ]
+        )
+    else:
+        lines.extend([f"Категории: {_category_scope_label(category_scope)}", ""])
     for estimate in estimates:
-        lines.extend(render_estimate_block(estimate))
+        lines.extend(render_estimate_block(estimate, debug=debug))
         lines.append("")
+    warning = None if debug else _compact_warning(estimates)
+    if warning:
+        lines.append(warning)
     lines.append("Это оценка, а не гарантия зачисления.")
     return "\n".join(lines).strip()
 
 
-def render_estimate_block(estimate: AdmissionEstimate) -> list[str]:
+def render_estimate_block(estimate: AdmissionEstimate, *, debug: bool = False) -> list[str]:
+    if not debug:
+        return _render_compact_estimate_block(estimate)
+
     funding = _funding_label(estimate)
     position = estimate.raw_position
     position_text = _interval(position) if position else "нет данных"
@@ -88,6 +102,44 @@ def render_estimate_block(estimate: AdmissionEstimate) -> list[str]:
     return lines
 
 
+def _render_compact_estimate_block(estimate: AdmissionEstimate) -> list[str]:
+    funding = _funding_label(estimate)
+    position = estimate.raw_position
+    position_text = _interval(position) if position else "нет данных"
+    if estimate.relative_excluded_by:
+        position_text = "не учитывается"
+
+    lines = [f"{estimate.program_code} {estimate.program_name} - {funding}"]
+    if estimate.source_status != SourceStatus.OK or estimate.rows_count == 0:
+        lines.append(f"Источник: {_source_label(estimate)}")
+
+    if estimate.source_status == SourceStatus.OK:
+        lines.append(f"Мест: {estimate.places}; заявлений: {estimate.rows_count}")
+    else:
+        lines.extend([f"Мест: {estimate.places}", "Заявлений: не определено"])
+
+    if estimate.target_entrant_code:
+        lines.append(f"Код: {_compact_target_code_label(estimate)}")
+    if estimate.target_priority is not None:
+        lines.append(f"Приоритет: {estimate.target_priority}")
+
+    lines.extend(
+        [
+            f"Позиция: {position_text}",
+            f"Проходной сейчас: {_value_or_no_data(estimate.current_passing_score)}",
+        ]
+    )
+    if estimate.relative_excluded_by:
+        lines.append(f"Причина: проходит выше по приоритету в {estimate.relative_excluded_by}")
+    lines.extend(
+        [
+            f"Статус: {ZONE_LABELS[estimate.zone]}",
+            f"Достоверность: {_confidence_label(estimate.confidence)}",
+        ]
+    )
+    return lines
+
+
 def render_programs() -> str:
     from app.config import PROGRAMS
 
@@ -104,6 +156,12 @@ def render_help() -> str:
         [
             "Нажмите «Актуальный статус вне приоритетов» для обычной оценки по опубликованному списку.",
             "Нажмите «Актуальный относительный статус» для оценки с учетом более высоких приоритетов.",
+            "",
+            "По умолчанию статус компактный: места, заявления, позиция, проходной, статус и достоверность.",
+            "/debug включает или выключает подробный режим. В подробном режиме показываются источник, строки с баллами, расчет, фильтрация и прогноз.",
+            "",
+            "Относительный статус исключает заявку из направления, если тот же код уверенно проходит на более высоком приоритете в выбранном режиме категорий. Спорные равные баллы на границе мест остаются в расчете.",
+            "Если опубликованных баллов меньше, чем мест, проходной может быть не рассчитан, а достоверность будет минимальной.",
             "",
             "Текстовая команда /status тоже работает.",
         ]
@@ -187,6 +245,14 @@ def _target_code_label(estimate: AdmissionEstimate) -> str:
     return f"{estimate.target_entrant_code} не проверен"
 
 
+def _compact_target_code_label(estimate: AdmissionEstimate) -> str:
+    if estimate.target_found is True:
+        return "найден"
+    if estimate.target_found is False:
+        return "не найден"
+    return "не проверен"
+
+
 def _calculation_note(estimate: AdmissionEstimate) -> str | None:
     if estimate.source_status != SourceStatus.OK:
         return None
@@ -207,6 +273,19 @@ def _relative_note(estimate: AdmissionEstimate) -> str | None:
     if estimate.relative_excluded_by:
         return f"Относительный расчет: заявка проходит выше по приоритету в {estimate.relative_excluded_by}."
     return "Относительный расчет: исключены заявки, проходящие по более высокому приоритету в выбранном режиме категорий."
+
+
+def _compact_warning(estimates: list[AdmissionEstimate]) -> str | None:
+    if any(estimate.source_status != SourceStatus.OK for estimate in estimates):
+        return "Есть ошибки получения данных. Включите /debug, чтобы увидеть детали источника."
+    if any(
+        estimate.source_status == SourceStatus.OK
+        and estimate.scored_rows_count is not None
+        and estimate.scored_rows_count < estimate.places
+        for estimate in estimates
+    ):
+        return "Часть списков содержит мало опубликованных баллов, поэтому оценка предварительная."
+    return None
 
 
 def _source_label(estimate: AdmissionEstimate) -> str:

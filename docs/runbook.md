@@ -20,6 +20,7 @@ pytest -q
 python -m app.cli check --score 195
 python -m app.cli check --score 195 --relative
 python -m app.cli check --code 1158236 --relative
+python -m app.cli check --code 1158236 --relative --debug
 ```
 
 ## Discovery
