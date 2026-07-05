@@ -162,3 +162,6 @@ For a code-based profile, the target application is kept in each of its own prio
 target has priority `3` in a list, the relative position keeps priority `1`, filters priority `2`
 and `3` applicants that pass higher, and ignores priority `4..5` applicants for that target-list
 estimate.
+
+Chat status blocks are sorted by specialty priority and use a `Приоритет N:` prefix in the block
+heading.

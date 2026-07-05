@@ -190,7 +190,7 @@ def test_render_relative_status_and_exclusion_note() -> None:
     assert "Код: найден" in status
     assert "Код: 1158236 найден" not in status
     assert "Учитывается после приоритетов: 12" not in status
-    assert "Приоритет: 2" in status
+    assert "Приоритет 2: 09.03.03 Прикладная информатика - бюджет" in status
     assert "Позиция: не учитывается" in status
     assert "Причина: проходит выше по приоритету в 01.03.02" in status
     assert "Статус: проходит выше по приоритету" in status
@@ -236,3 +236,44 @@ def test_render_relative_status_debug_keeps_details() -> None:
     assert "Приоритет в списке: 2" in status
     assert "Относительная позиция: не учитывается" in status
     assert "Относительный расчет:" in status
+
+
+def test_render_status_sorts_blocks_by_target_priority() -> None:
+    estimates = [
+        AdmissionEstimate(
+            program_code="09.03.03",
+            program_name="Прикладная информатика",
+            funding_type="budget",
+            places=20,
+            target_score=195,
+            raw_position=(3, 3),
+            effective_position=None,
+            current_passing_score=None,
+            forecast_passing_score=None,
+            zone=AdmissionZone.INSUFFICIENT_DATA,
+            confidence=0.1,
+            preliminary=True,
+            rows_count=1,
+            target_priority=3,
+        ),
+        AdmissionEstimate(
+            program_code="09.03.02",
+            program_name="Информационные системы и технологии",
+            funding_type="budget",
+            places=19,
+            target_score=195,
+            raw_position=(1, 1),
+            effective_position=None,
+            current_passing_score=None,
+            forecast_passing_score=None,
+            zone=AdmissionZone.PASSING,
+            confidence=0.1,
+            preliminary=True,
+            rows_count=1,
+            target_priority=1,
+        ),
+    ]
+
+    status = render_status(estimates, score=195)
+
+    assert status.index("Приоритет 1: 09.03.02") < status.index("Приоритет 3: 09.03.03")

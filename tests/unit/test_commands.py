@@ -249,4 +249,5 @@ def test_program_profile_applies_only_to_score_profile() -> None:
     code_result = commands._apply_program_profile(code_estimates, code_settings)
 
     assert [estimate.program_code for estimate in score_result] == ["01.03.02", "09.03.03"]
+    assert [estimate.target_priority for estimate in score_result] == [1, 2]
     assert [estimate.program_code for estimate in code_result] == ["01.03.02", "09.03.03"]

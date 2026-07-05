@@ -34,10 +34,11 @@ def render_status(
         )
     else:
         lines.extend([f"Категории: {_category_scope_label(category_scope)}", ""])
-    for estimate in estimates:
+    ranked_estimates = _ranked_estimates(estimates)
+    for estimate in ranked_estimates:
         lines.extend(render_estimate_block(estimate, debug=debug))
         lines.append("")
-    warning = None if debug else _compact_warning(estimates)
+    warning = None if debug else _compact_warning(ranked_estimates)
     if warning:
         lines.append(warning)
     lines.append("Это оценка, а не гарантия зачисления.")
@@ -65,7 +66,7 @@ def render_estimate_block(estimate: AdmissionEstimate, *, debug: bool = False) -
     )
 
     lines = [
-        f"{estimate.program_code} {estimate.program_name} - {funding}",
+        _estimate_heading(estimate, funding=funding),
         f"Источник: {_source_label(estimate)}",
         f"Мест: {estimate.places}",
         f"Подано заявлений: {applications_count}",
@@ -109,7 +110,7 @@ def _render_compact_estimate_block(estimate: AdmissionEstimate) -> list[str]:
     if estimate.relative_excluded_by:
         position_text = "не учитывается"
 
-    lines = [f"{estimate.program_code} {estimate.program_name} - {funding}"]
+    lines = [_estimate_heading(estimate, funding=funding)]
     if estimate.source_status != SourceStatus.OK or estimate.rows_count == 0:
         lines.append(f"Источник: {_source_label(estimate)}")
 
@@ -120,9 +121,6 @@ def _render_compact_estimate_block(estimate: AdmissionEstimate) -> list[str]:
 
     if estimate.target_entrant_code:
         lines.append(f"Код: {_compact_target_code_label(estimate)}")
-    if estimate.target_priority is not None:
-        lines.append(f"Приоритет: {estimate.target_priority}")
-
     lines.extend(
         [
             f"Позиция: {position_text}",
@@ -176,6 +174,30 @@ def _interval(value: tuple[int, int] | None) -> str:
     if value[0] == value[1]:
         return str(value[0])
     return f"{value[0]}-{value[1]}"
+
+
+def _ranked_estimates(estimates: list[AdmissionEstimate]) -> list[AdmissionEstimate]:
+    if not any(estimate.target_priority is not None for estimate in estimates):
+        return estimates
+    funding_order = {"budget": 0, "paid": 1}
+    return [
+        estimate
+        for _, estimate in sorted(
+            enumerate(estimates),
+            key=lambda item: (
+                item[1].target_priority if item[1].target_priority is not None else 10**9,
+                funding_order.get(item[1].funding_type, 9),
+                item[0],
+            ),
+        )
+    ]
+
+
+def _estimate_heading(estimate: AdmissionEstimate, *, funding: str) -> str:
+    heading = f"{estimate.program_code} {estimate.program_name} - {funding}"
+    if estimate.target_priority is None:
+        return heading
+    return f"Приоритет {estimate.target_priority}: {heading}"
 
 
 def _value_or_no_data(value: int | None) -> str:

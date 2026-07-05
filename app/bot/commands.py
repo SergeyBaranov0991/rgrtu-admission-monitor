@@ -430,7 +430,11 @@ def _apply_program_profile(
     if not priorities:
         return estimates
     funding_order = {"budget": 0, "paid": 1}
-    selected = [estimate for estimate in estimates if estimate.program_code in priorities]
+    selected = [
+        estimate.model_copy(update={"target_priority": priorities[estimate.program_code]})
+        for estimate in estimates
+        if estimate.program_code in priorities
+    ]
     return sorted(
         selected,
         key=lambda estimate: (
