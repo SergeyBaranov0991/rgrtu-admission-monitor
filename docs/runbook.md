@@ -18,6 +18,8 @@ docker compose -p rgrtu-tg-bot -f docker-compose.tg.yml logs --tail=200 tg-bot
 python -m ruff check .
 pytest -q
 python -m app.cli check --score 195
+python -m app.cli check --score 195 --relative
+python -m app.cli check --code 1158236 --relative
 ```
 
 ## Discovery

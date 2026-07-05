@@ -1,7 +1,12 @@
 from sqlalchemy import select
 
+from app.bot import commands
 from app.bot.commands import CommandContext, handle_command
-from app.bot.keyboards import ALL_CATEGORIES_BUTTON_TEXT, SEARCH_BY_CODE_BUTTON_TEXT
+from app.bot.keyboards import (
+    ALL_CATEGORIES_BUTTON_TEXT,
+    RELATIVE_STATUS_BUTTON_TEXT,
+    SEARCH_BY_CODE_BUTTON_TEXT,
+)
 from app.config import Settings
 from app.db.models import UserSettings
 from app.db.repositories import build_session_factory
@@ -58,3 +63,21 @@ async def test_all_categories_button_saves_scope(tmp_path) -> None:
         saved = session.scalar(select(UserSettings).where(UserSettings.max_user_id == "tg:123"))
         assert saved is not None
         assert saved.category_scope == "all"
+
+
+async def test_relative_status_button_uses_relative_estimate(tmp_path, monkeypatch) -> None:
+    settings = _settings(tmp_path)
+    calls: list[dict] = []
+
+    async def fake_estimate_from_live(*args, **kwargs) -> list:
+        calls.append({"args": args, "kwargs": kwargs})
+        return []
+
+    monkeypatch.setattr(commands, "estimate_from_live", fake_estimate_from_live)
+
+    reply = await handle_command(
+        CommandContext(user_id="tg:123", text=RELATIVE_STATUS_BUTTON_TEXT, settings=settings)
+    )
+
+    assert "Режим расчета: с учетом приоритетов" in reply
+    assert calls[0]["kwargs"]["relative"] is True

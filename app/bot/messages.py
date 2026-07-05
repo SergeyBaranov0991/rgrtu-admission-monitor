@@ -14,13 +14,16 @@ def render_status(
     score: int,
     entrant_code: str | None = None,
     category_scope: str = "general",
+    relative: bool = False,
     tz: str = "Europe/Moscow",
 ) -> str:
     now = datetime.now(ZoneInfo(tz)).strftime("%d.%m.%Y %H:%M")
+    title = "РГРТУ - относительный статус" if relative else "РГРТУ - статус вне приоритетов"
     lines = [
-        f"РГРТУ - статус на {now} МСК",
+        f"{title} на {now} МСК",
         _profile_label(score=score, entrant_code=entrant_code),
         f"Режим категорий: {_category_scope_label(category_scope)}",
+        f"Режим расчета: {_calculation_mode_label(relative)}",
         "",
     ]
     for estimate in estimates:
@@ -34,11 +37,18 @@ def render_estimate_block(estimate: AdmissionEstimate) -> list[str]:
     funding = _funding_label(estimate)
     position = estimate.raw_position
     position_text = _interval(position) if position else "нет данных"
+    if estimate.relative_excluded_by:
+        position_text = "не учитывается"
     forecast = _forecast_label(estimate)
     confidence = _confidence_label(estimate.confidence)
     preliminary = " (предварительно)" if estimate.preliminary else ""
     applications_count = _applications_count_label(estimate)
     passing_score = _value_or_no_data(estimate.current_passing_score)
+    position_label = (
+        "Относительная позиция"
+        if estimate.ranking_mode == "relative"
+        else "Оценочная позиция"
+    )
 
     lines = [
         f"{estimate.program_code} {estimate.program_name} - {funding}",
@@ -46,11 +56,15 @@ def render_estimate_block(estimate: AdmissionEstimate) -> list[str]:
         f"Мест: {estimate.places}",
         f"Подано заявлений: {applications_count}",
     ]
+    if estimate.relative_rows_count is not None:
+        lines.append(f"Учитывается после приоритетов: {estimate.relative_rows_count}")
     if estimate.target_entrant_code:
         lines.append(f"Код в списке: {_target_code_label(estimate)}")
+    if estimate.target_priority is not None:
+        lines.append(f"Приоритет в списке: {estimate.target_priority}")
     lines.extend(
         [
-            f"Оценочная позиция: {position_text}",
+            f"{position_label}: {position_text}",
             f"Текущий проходной: {passing_score}",
         ]
     )
@@ -61,6 +75,9 @@ def render_estimate_block(estimate: AdmissionEstimate) -> list[str]:
     note = _calculation_note(estimate)
     if note:
         lines.append(note)
+    relative_note = _relative_note(estimate)
+    if relative_note:
+        lines.append(relative_note)
     lines.extend(
         [
             f"Прогноз проходного: {forecast}{preliminary}",
@@ -85,7 +102,8 @@ def render_programs() -> str:
 def render_help() -> str:
     return "\n".join(
         [
-            "Нажмите кнопку «Актуальный статус», чтобы получить свежую оценку по направлениям.",
+            "Нажмите «Актуальный статус вне приоритетов» для обычной оценки по опубликованному списку.",
+            "Нажмите «Актуальный относительный статус» для оценки с учетом более высоких приоритетов.",
             "",
             "Текстовая команда /status тоже работает.",
         ]
@@ -122,6 +140,10 @@ def _category_scope_label(value: str) -> str:
     return "все категории" if value == "all" else "только общий конкурс"
 
 
+def _calculation_mode_label(relative: bool) -> str:
+    return "с учетом приоритетов" if relative else "вне приоритетов"
+
+
 def _funding_label(estimate: AdmissionEstimate) -> str:
     funding = "платное" if estimate.funding_type == "paid" else "бюджет"
     basis = estimate.admission_basis.strip()
@@ -148,7 +170,12 @@ def _applications_count_label(estimate: AdmissionEstimate) -> str:
     label = str(estimate.rows_count)
     scored = estimate.scored_rows_count
     if scored is not None and scored != estimate.rows_count:
-        label = f"{label} (с баллами: {scored})"
+        scored_label = (
+            "с баллами после фильтрации"
+            if estimate.ranking_mode == "relative"
+            else "с баллами"
+        )
+        label = f"{label} ({scored_label}: {scored})"
     return label
 
 
@@ -172,6 +199,14 @@ def _calculation_note(estimate: AdmissionEstimate) -> str | None:
             f"для обычного проходного нужно минимум {estimate.places}."
         )
     return f"Расчет: по {scored} строкам с баллами."
+
+
+def _relative_note(estimate: AdmissionEstimate) -> str | None:
+    if estimate.ranking_mode != "relative":
+        return None
+    if estimate.relative_excluded_by:
+        return f"Относительный расчет: заявка проходит выше по приоритету в {estimate.relative_excluded_by}."
+    return "Относительный расчет: исключены заявки, проходящие по более высокому приоритету в выбранном режиме категорий."
 
 
 def _source_label(estimate: AdmissionEstimate) -> str:

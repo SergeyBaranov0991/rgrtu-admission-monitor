@@ -5,6 +5,7 @@ from dataclasses import dataclass
 from app.bot.keyboards import (
     is_all_categories_request,
     is_general_only_request,
+    is_relative_status_request,
     is_search_by_code_request,
     is_search_by_score_request,
     is_status_request,
@@ -29,6 +30,7 @@ async def handle_command(context: CommandContext) -> str:
     user_settings = store.load(context.user_id)
     is_control_text = (
         is_status_request(text)
+        or is_relative_status_request(text)
         or is_search_by_score_request(text)
         or is_search_by_code_request(text)
         or is_general_only_request(text)
@@ -39,7 +41,10 @@ async def handle_command(context: CommandContext) -> str:
         return _handle_pending_input(user_settings, text, store)
 
     if is_status_request(text):
-        return await _render_current_status(context.settings, user_settings)
+        return await _render_current_status(context.settings, user_settings, relative=False)
+
+    if is_relative_status_request(text):
+        return await _render_current_status(context.settings, user_settings, relative=True)
 
     if is_search_by_score_request(text):
         if user_settings is None:
@@ -50,7 +55,7 @@ async def handle_command(context: CommandContext) -> str:
         return (
             f"Профиль поиска: по баллу.\n"
             f"Текущий балл: {_user_total_score(user_settings)}.\n\n"
-            "Отправьте новый балл числом, например 195, или нажмите «Актуальный статус»."
+            "Отправьте новый балл числом, например 195, или нажмите кнопку статуса."
         )
 
     if is_search_by_code_request(text):
@@ -177,7 +182,12 @@ def _set_scope(settings: UserSettings | None, value: str, store: UserSettingsSto
     return f"Режим категорий: {_category_scope_label(settings.category_scope)}."
 
 
-async def _render_current_status(settings: Settings, user_settings: UserSettings | None) -> str:
+async def _render_current_status(
+    settings: Settings,
+    user_settings: UserSettings | None,
+    *,
+    relative: bool,
+) -> str:
     score = _score_for_status(settings, user_settings)
     scope = _category_scope(user_settings)
     entrant_code = _entrant_code_for_status(user_settings)
@@ -188,12 +198,14 @@ async def _render_current_status(settings: Settings, user_settings: UserSettings
         settings,
         category_scope=scope,
         entrant_code=entrant_code,
+        relative=relative,
     )
     return render_status(
         estimates,
         score=score,
         entrant_code=entrant_code,
         category_scope=scope,
+        relative=relative,
         tz=settings.timezone,
     )
 

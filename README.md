@@ -17,6 +17,8 @@ Current implementation is the first MVP slice:
 - per-chat search profile: score or RGRTU service entrant code;
 - category scope switch: only general competition or all categories;
 - admission rank interval and zone estimation;
+- relative admission estimate that filters applicants passing by higher priority in the selected
+  category scope;
 - live RGRTU public-list check through the official competition-list page payload;
 - RGRTU Livewire subject discovery;
 - Docker Compose and operational docs.
@@ -30,6 +32,8 @@ pip install -e ".[dev]"
 python -m ruff check .
 pytest
 python -m app.cli check --score 195
+python -m app.cli check --score 195 --relative
+python -m app.cli check --code 1158236 --relative
 python -m app.cli check --score 195 --insecure
 python -m app.cli check --score 195 --fixture tests/fixtures/rgrtu/competition_list_full.json
 python -m app.cli discover
@@ -53,13 +57,16 @@ Actions.
 - `app.bot.user_settings` loads and saves per-chat score/code/category settings.
 - `app.bot.messages` renders human-readable MAX/Telegram responses.
 - `app.admission.estimator` computes rank, passing-score, confidence, and forecast fields.
+- `app.admission.relative` builds priority-aware competition lists for relative status.
 - `app.rgrtu.livewire_adapter` fetches current public RGRTU competition-list payloads.
 
 ## Bot Controls
 
 Both MAX and Telegram show the same reply buttons:
 
-- `Актуальный статус` - refresh current estimates.
+- `Актуальный статус вне приоритетов` - refresh estimates by the published list order/scores.
+- `Актуальный относительный статус` - refresh estimates after filtering applicants that pass by a
+  higher priority within the selected category scope.
 - `Искать по баллу` - switch to score profile and wait for a numeric score.
 - `Искать по коду` - switch to RGRTU service-code profile and wait for a numeric entrant code.
 - `Только общий конкурс` - show only the main budget general-competition category.
@@ -69,6 +76,8 @@ Both MAX and Telegram show the same reply buttons:
 Text commands are also supported:
 
 ```text
+/status
+/relative
 /score 195
 /achievements 5
 /code 1158236
@@ -124,3 +133,8 @@ The bot reads current public data from:
 `submitted` counter used for `Подано заявлений`, while entrant rows are sanitized before internal
 use. Local Windows checks may need `--insecure` if TLS verification is intercepted; Docker trusts
 the bundled Russian CA chain.
+
+Relative status uses the same loaded competitions as the current category scope. A row with priority
+`2..5` is excluded from a lower-priority list only when the same application code is confidently
+passing in a higher-priority list. Ties on the passing boundary are kept in the lower-priority list
+unless the whole equal-score interval fits into the available places.

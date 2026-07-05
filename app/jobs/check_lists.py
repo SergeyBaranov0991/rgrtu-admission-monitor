@@ -6,6 +6,12 @@ import logging
 import httpx
 
 from app.admission.estimator import AdmissionEstimate, estimate_competition, estimate_competition_by_code
+from app.admission.relative import (
+    build_relative_selection,
+    find_row_by_applicant_id,
+    relative_rows_count,
+)
+from app.admission.zones import AdmissionZone
 from app.config import PROGRAMS, Settings
 from app.rgrtu.base import CompetitionList, Funding, SourceStatus
 from app.rgrtu.livewire_adapter import RgrtuLivewireListAdapter, SourceSchemaError, build_empty_competition
@@ -41,6 +47,7 @@ async def estimate_from_live(
     *,
     category_scope: str = "general",
     entrant_code: str | None = None,
+    relative: bool = False,
 ) -> list[AdmissionEstimate]:
     try:
         competitions = await load_live_competitions(settings, category_scope=category_scope)
@@ -68,12 +75,80 @@ async def estimate_from_live(
             source_status=SourceStatus.UNAVAILABLE,
             category_scope=category_scope,
         )
+    if relative:
+        return estimate_relative_competitions(
+            competitions,
+            score,
+            entrant_code=entrant_code,
+        )
     if entrant_code:
         return [
             estimate_competition_by_code(competition, entrant_code, fallback_score=score)
             for competition in competitions
         ]
     return [estimate_competition(competition, score) for competition in competitions]
+
+
+def estimate_relative_competitions(
+    competitions: list[CompetitionList],
+    score: int,
+    *,
+    entrant_code: str | None = None,
+) -> list[AdmissionEstimate]:
+    selection = build_relative_selection(competitions)
+    estimates: list[AdmissionEstimate] = []
+    for index, original in enumerate(competitions):
+        filtered = selection.competitions[index]
+        original_target = (
+            find_row_by_applicant_id(original, entrant_code)
+            if entrant_code is not None
+            else None
+        )
+        exclusion = (
+            selection.exclusions.get((index, entrant_code))
+            if entrant_code is not None
+            else None
+        )
+        if exclusion is not None and original_target is not None:
+            target_score = original_target.total_score if original_target.total_score is not None else score
+            estimate = estimate_competition(filtered, target_score).model_copy(
+                update={
+                    "raw_position": None,
+                    "effective_position": None,
+                    "zone": AdmissionZone.HIGHER_PRIORITY,
+                    "target_entrant_code": entrant_code,
+                    "target_found": True,
+                    "target_priority": original_target.priority,
+                    "relative_excluded_by": exclusion.higher.label,
+                }
+            )
+        elif entrant_code:
+            estimate = estimate_competition_by_code(
+                filtered,
+                entrant_code,
+                fallback_score=score,
+                use_row_position=False,
+            ).model_copy(
+                update={
+                    "target_priority": original_target.priority if original_target else None,
+                }
+            )
+        else:
+            estimate = estimate_competition(filtered, score)
+
+        estimates.append(
+            estimate.model_copy(
+                update={
+                    "ranking_mode": "relative",
+                    "relative_rows_count": (
+                        relative_rows_count(filtered)
+                        if filtered.source_status == SourceStatus.OK
+                        else None
+                    ),
+                }
+            )
+        )
+    return estimates
 
 
 def unavailable_competitions(

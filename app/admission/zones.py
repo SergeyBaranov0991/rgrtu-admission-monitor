@@ -9,6 +9,7 @@ class AdmissionZone(StrEnum):
     NON_PASSING = "NON_PASSING"
     INSUFFICIENT_DATA = "INSUFFICIENT_DATA"
     SOURCE_UNAVAILABLE = "SOURCE_UNAVAILABLE"
+    HIGHER_PRIORITY = "HIGHER_PRIORITY"
 
 
 ZONE_LABELS: dict[AdmissionZone, str] = {
@@ -17,5 +18,5 @@ ZONE_LABELS: dict[AdmissionZone, str] = {
     AdmissionZone.NON_PASSING: "непроходная зона",
     AdmissionZone.INSUFFICIENT_DATA: "недостаточно данных",
     AdmissionZone.SOURCE_UNAVAILABLE: "источник недоступен",
+    AdmissionZone.HIGHER_PRIORITY: "проходит выше по приоритету",
 }
-

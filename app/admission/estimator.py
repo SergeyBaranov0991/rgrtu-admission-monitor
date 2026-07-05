@@ -43,6 +43,10 @@ class AdmissionEstimate(BaseModel):
     scored_rows_count: int | None = None
     target_entrant_code: str | None = None
     target_found: bool | None = None
+    target_priority: int | None = None
+    ranking_mode: str = "raw"
+    relative_rows_count: int | None = None
+    relative_excluded_by: str | None = None
 
 
 @dataclass(frozen=True)
@@ -136,6 +140,7 @@ def estimate_competition_by_code(
     *,
     fallback_score: int,
     today: date | None = None,
+    use_row_position: bool = True,
 ) -> AdmissionEstimate:
     rows = [row for row in competition.rows if row.anonymous_applicant_id == entrant_code and row.is_active]
     if not rows:
@@ -158,7 +163,11 @@ def estimate_competition_by_code(
     row = min(rows, key=lambda item: item.position or 10**9)
     target_score = row.total_score if row.total_score is not None else fallback_score
     estimate = estimate_competition(competition, target_score, today=today)
-    position = (row.position, row.position) if row.position is not None else estimate.raw_position
+    position = (
+        (row.position, row.position)
+        if use_row_position and row.position is not None
+        else estimate.raw_position
+    )
     zone = estimate.zone
     if position is not None and estimate.scored_rows_count is not None:
         if estimate.scored_rows_count >= estimate.places:

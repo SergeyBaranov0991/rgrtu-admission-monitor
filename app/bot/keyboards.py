@@ -2,7 +2,9 @@ from __future__ import annotations
 
 
 STATUS_COMMAND = "/status"
-STATUS_BUTTON_TEXT = "Актуальный статус"
+STATUS_BUTTON_TEXT = "Актуальный статус вне приоритетов"
+RELATIVE_STATUS_COMMAND = "/relative_status"
+RELATIVE_STATUS_BUTTON_TEXT = "Актуальный относительный статус"
 SEARCH_BY_SCORE_BUTTON_TEXT = "Искать по баллу"
 SEARCH_BY_CODE_BUTTON_TEXT = "Искать по коду"
 GENERAL_ONLY_BUTTON_TEXT = "Только общий конкурс"
@@ -10,10 +12,18 @@ ALL_CATEGORIES_BUTTON_TEXT = "Все категории"
 STATUS_ALIASES = {
     STATUS_COMMAND,
     "/check",
+    "актуальный статус",
     STATUS_BUTTON_TEXT.casefold(),
     "статус",
     "текущий статус",
     "проверить статус",
+}
+RELATIVE_STATUS_ALIASES = {
+    RELATIVE_STATUS_COMMAND,
+    "/relative",
+    RELATIVE_STATUS_BUTTON_TEXT.casefold(),
+    "относительный статус",
+    "статус с учетом приоритетов",
 }
 SEARCH_BY_SCORE_ALIASES = {SEARCH_BY_SCORE_BUTTON_TEXT.casefold(), "/profile score", "/score_mode"}
 SEARCH_BY_CODE_ALIASES = {SEARCH_BY_CODE_BUTTON_TEXT.casefold(), "/profile code", "/code_mode"}
@@ -23,6 +33,10 @@ ALL_CATEGORIES_ALIASES = {ALL_CATEGORIES_BUTTON_TEXT.casefold(), "/scope all", "
 
 def is_status_request(text: str) -> bool:
     return text.strip().casefold() in STATUS_ALIASES
+
+
+def is_relative_status_request(text: str) -> bool:
+    return text.strip().casefold() in RELATIVE_STATUS_ALIASES
 
 
 def is_search_by_score_request(text: str) -> bool:
@@ -47,6 +61,7 @@ def max_status_keyboard() -> dict:
         "payload": {
             "buttons": [
                 [{"type": "message", "text": STATUS_BUTTON_TEXT}],
+                [{"type": "message", "text": RELATIVE_STATUS_BUTTON_TEXT}],
                 [
                     {"type": "message", "text": SEARCH_BY_SCORE_BUTTON_TEXT},
                     {"type": "message", "text": SEARCH_BY_CODE_BUTTON_TEXT},
@@ -64,6 +79,7 @@ def telegram_status_reply_markup() -> dict:
     return {
         "keyboard": [
             [{"text": STATUS_BUTTON_TEXT}],
+            [{"text": RELATIVE_STATUS_BUTTON_TEXT}],
             [{"text": SEARCH_BY_SCORE_BUTTON_TEXT}, {"text": SEARCH_BY_CODE_BUTTON_TEXT}],
             [{"text": GENERAL_ONLY_BUTTON_TEXT}, {"text": ALL_CATEGORIES_BUTTON_TEXT}],
         ],

@@ -1,6 +1,6 @@
 from app.admission.estimator import AdmissionEstimate
 from app.admission.zones import AdmissionZone
-from app.bot.messages import render_estimate_block
+from app.bot.messages import render_estimate_block, render_status
 from app.rgrtu.base import SourceStatus
 
 
@@ -150,3 +150,44 @@ def test_render_estimate_block_shows_parse_error() -> None:
     )
 
     assert "Источник: ошибка разбора данных РГРТУ" in render_estimate_block(estimate)
+
+
+def test_render_relative_status_and_exclusion_note() -> None:
+    estimate = AdmissionEstimate(
+        program_code="09.03.03",
+        program_name="Прикладная информатика",
+        funding_type="budget",
+        places=20,
+        target_score=195,
+        raw_position=None,
+        effective_position=None,
+        current_passing_score=183,
+        forecast_passing_score=(176, 190),
+        zone=AdmissionZone.HIGHER_PRIORITY,
+        confidence=0.6,
+        preliminary=True,
+        rows_count=99,
+        scored_rows_count=20,
+        target_entrant_code="1158236",
+        target_found=True,
+        target_priority=2,
+        ranking_mode="relative",
+        relative_rows_count=12,
+        relative_excluded_by="01.03.02 Прикладная математика и информатика - бюджет",
+    )
+
+    status = render_status(
+        [estimate],
+        score=195,
+        entrant_code="1158236",
+        category_scope="general",
+        relative=True,
+    )
+
+    assert "РГРТУ - относительный статус" in status
+    assert "Режим расчета: с учетом приоритетов" in status
+    assert "Подано заявлений: 99 (с баллами после фильтрации: 20)" in status
+    assert "Учитывается после приоритетов: 12" in status
+    assert "Приоритет в списке: 2" in status
+    assert "Относительная позиция: не учитывается" in status
+    assert "Статус: проходит выше по приоритету" in status

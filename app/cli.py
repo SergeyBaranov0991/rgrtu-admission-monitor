@@ -7,7 +7,12 @@ from pathlib import Path
 
 from app.bot.messages import render_status
 from app.config import get_settings
-from app.jobs.check_lists import estimate_from_fixture, estimate_from_live
+from app.jobs.check_lists import (
+    estimate_from_fixture,
+    estimate_from_live,
+    estimate_relative_competitions,
+)
+from app.rgrtu.parser import parse_fixture_file
 from app.rgrtu.json_adapter import RgrtuLivewireAdapter
 
 
@@ -20,6 +25,12 @@ def main() -> None:
 
     check = subparsers.add_parser("check", help="Run a local admission estimate")
     check.add_argument("--score", type=int, default=None)
+    check.add_argument("--code", default=None, help="RGRTU service entrant code")
+    check.add_argument(
+        "--relative",
+        action="store_true",
+        help="Estimate with higher-priority filtering",
+    )
     check.add_argument("--fixture", type=Path, default=None)
     check.add_argument(
         "--insecure",
@@ -41,10 +52,32 @@ def main() -> None:
             settings.rgrtu_verify_ssl = False
         score = args.score if args.score is not None else settings.total_default_score
         if args.fixture is not None:
-            estimates = estimate_from_fixture(score, args.fixture)
+            if args.relative:
+                estimates = estimate_relative_competitions(
+                    parse_fixture_file(str(args.fixture)),
+                    score,
+                    entrant_code=args.code,
+                )
+            else:
+                estimates = estimate_from_fixture(score, args.fixture)
         else:
-            estimates = asyncio.run(estimate_from_live(score, settings))
-        print(render_status(estimates, score=score, tz=settings.timezone))
+            estimates = asyncio.run(
+                estimate_from_live(
+                    score,
+                    settings,
+                    entrant_code=args.code,
+                    relative=args.relative,
+                )
+            )
+        print(
+            render_status(
+                estimates,
+                score=score,
+                entrant_code=args.code,
+                relative=args.relative,
+                tz=settings.timezone,
+            )
+        )
     elif args.command == "discover":
         asyncio.run(_discover(insecure=args.insecure))
 
