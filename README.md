@@ -15,6 +15,8 @@ Current implementation is the first MVP slice:
 - shared command handling for MAX and Telegram;
 - per-chat settings stored in SQLite through `app.bot.user_settings`;
 - per-chat search profile: score or RGRTU service entrant code;
+- per-chat onboarding: code-based setup skips manual priorities, score-based setup asks for
+  specialty priorities;
 - category scope switch: only general competition or all categories;
 - admission rank interval and zone estimation;
 - relative admission estimate that filters applicants passing by higher priority in the selected
@@ -55,7 +57,8 @@ Actions.
 ## Code Structure
 
 - `app.bot.commands` routes user commands and button text.
-- `app.bot.user_settings` loads and saves per-chat score/code/category/debug settings.
+- `app.bot.user_settings` loads and saves per-chat score/code/category/debug/onboarding settings.
+- `app.bot.profile` parses and stores score-profile specialty priorities.
 - `app.bot.messages` renders human-readable MAX/Telegram responses.
 - `app.admission.estimator` computes rank, passing-score, confidence, and forecast fields.
 - `app.admission.relative` builds priority-aware competition lists for relative status.
@@ -79,6 +82,7 @@ Text commands are also supported:
 ```text
 /status
 /relative
+/setup
 /score 195
 /achievements 5
 /code 1158236
@@ -92,6 +96,12 @@ Status responses are compact by default. `/debug` toggles detailed responses for
 when enabled, status output includes source status, scored-row counts, calculation notes,
 priority-filter details, and forecast fields. The CLI uses the same split: add `--debug` to print
 the detailed form.
+
+`/setup` configures the current chat. The first answer is either the RGRTU service entrant code or a
+score. If the answer is a long numeric code, the bot stores code search and derives specialties and
+priorities from the RGRTU rows where that code appears. If the answer is a 3-digit score, the bot
+asks for manual specialty priorities in the form `01.03.02;1`; this manual profile is used only for
+score-based status filtering and ordering.
 
 GitHub Actions deployment uses the production host/path from
 [.github/workflows/deploy.yml](.github/workflows/deploy.yml). It needs this repository secret:

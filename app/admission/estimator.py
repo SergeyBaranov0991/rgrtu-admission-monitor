@@ -180,6 +180,7 @@ def estimate_competition_by_code(
             "raw_position": position,
             "target_entrant_code": entrant_code,
             "target_found": True,
+            "target_priority": row.priority,
             "zone": zone,
         }
     )

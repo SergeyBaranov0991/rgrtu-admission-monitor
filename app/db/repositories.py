@@ -55,6 +55,7 @@ def _ensure_sqlite_user_settings_columns(engine) -> None:
     migrations = {
         "search_profile": "ALTER TABLE user_settings ADD COLUMN search_profile VARCHAR(16) DEFAULT 'score'",
         "entrant_code": "ALTER TABLE user_settings ADD COLUMN entrant_code VARCHAR(32)",
+        "program_priorities_json": "ALTER TABLE user_settings ADD COLUMN program_priorities_json TEXT",
         "category_scope": "ALTER TABLE user_settings ADD COLUMN category_scope VARCHAR(16) DEFAULT 'general'",
         "debug_enabled": "ALTER TABLE user_settings ADD COLUMN debug_enabled INTEGER DEFAULT 0",
         "pending_action": "ALTER TABLE user_settings ADD COLUMN pending_action VARCHAR(32)",

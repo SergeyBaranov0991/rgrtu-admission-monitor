@@ -103,7 +103,7 @@ def test_estimator_by_code_uses_exact_row_position() -> None:
         ),
         rows=[
             ApplicantRow(anonymous_applicant_id="1043871", position=1, total_score=276),
-            ApplicantRow(anonymous_applicant_id="1158236", position=2, total_score=195),
+            ApplicantRow(anonymous_applicant_id="1158236", position=2, total_score=195, priority=2),
             ApplicantRow(anonymous_applicant_id="1055565", position=3, total_score=183),
         ],
     )
@@ -119,6 +119,7 @@ def test_estimator_by_code_uses_exact_row_position() -> None:
     assert estimate.raw_position == (2, 2)
     assert estimate.target_entrant_code == "1158236"
     assert estimate.target_found is True
+    assert estimate.target_priority == 2
 
 
 def test_estimator_by_code_marks_missing_code() -> None:
