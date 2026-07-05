@@ -10,6 +10,7 @@ from app.rgrtu.livewire_adapter import (
     extract_livewire_component,
     extract_livewire_response_html,
     extract_livewire_token,
+    program_info_for_competition_payload,
     select_profile_competitions,
     select_tracked_competition,
 )
@@ -120,6 +121,18 @@ def test_select_profile_competitions_uses_tracked_profile_id() -> None:
         "tracked-general",
         "tracked-paid",
     ]
+
+
+def test_program_info_for_competition_payload_uses_title_or_edu_program() -> None:
+    assert program_info_for_competition_payload(
+        {"programSetPrintTitle": "10.03.01 Информационная безопасность"}
+    ) == ("10.03.01", "Информационная безопасность")
+    assert program_info_for_competition_payload(
+        {
+            "programSetPrintTitle": "",
+            "eduPrograms": [{"fullTitleWithoutSubjectIndex": "11.03.01 Радиотехника"}],
+        }
+    ) == ("11.03.01", "Радиотехника")
 
 
 def test_competition_payload_keeps_official_applications_count() -> None:

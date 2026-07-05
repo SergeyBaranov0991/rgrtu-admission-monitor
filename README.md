@@ -15,8 +15,8 @@ Current implementation is the first MVP slice:
 - shared command handling for MAX and Telegram;
 - per-chat settings stored in SQLite through `app.bot.user_settings`;
 - per-chat search profile: score or RGRTU service entrant code;
-- per-chat onboarding: code-based setup skips manual priorities, score-based setup asks for
-  specialty priorities;
+- per-chat onboarding: code-based setup auto-discovers up to 5 specialties on the first status
+  request, score-based setup asks for specialty priorities;
 - category scope switch: only general competition or all categories;
 - admission rank interval and zone estimation;
 - relative admission estimate that filters applicants passing by higher priority in the selected
@@ -98,10 +98,11 @@ priority-filter details, and forecast fields. The CLI uses the same split: add `
 the detailed form.
 
 `/setup` configures the current chat. The first answer is either the RGRTU service entrant code or a
-score. If the answer is a long numeric code, the bot stores code search and derives specialties and
-priorities from the RGRTU rows where that code appears. If the answer is a 3-digit score, the bot
-asks for manual specialty priorities in the form `01.03.02;1`; this manual profile is used only for
-score-based status filtering and ordering.
+score. If the answer is a long numeric code, the bot stores code search; the first status request
+loads all full-time RGRTU competitions, finds up to 5 specialties where that code appears, stores the
+specialty profile, and then filters status output by that profile. If the answer is a 3-digit score,
+the bot asks for manual specialty priorities in the form `01.03.02;1`; this manual profile is used
+only for score-based status filtering and ordering.
 
 GitHub Actions deployment uses the production host/path from
 [.github/workflows/deploy.yml](.github/workflows/deploy.yml). It needs this repository secret:
@@ -156,3 +157,8 @@ Relative status uses the same loaded competitions as the current category scope.
 passing in a higher-priority list. Ties on the passing boundary are kept in the lower-priority list
 unless the whole equal-score interval fits into the available places. The compact chat response only
 shows the result; `/help` and `/debug` expose the calculation details.
+
+For a code-based profile, the target application is kept in each of its own priority lists. If the
+target has priority `3` in a list, the relative position keeps priority `1`, filters priority `2`
+and `3` applicants that pass higher, and ignores priority `4..5` applicants for that target-list
+estimate.

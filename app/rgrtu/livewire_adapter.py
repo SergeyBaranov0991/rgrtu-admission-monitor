@@ -19,6 +19,7 @@ PAID_COMPETITION_CODE = "06"
 PAID_COMPETITION_CODES = {"05", "06"}
 INITIAL_DATA_RE = re.compile(r'wire:initial-data="([^"]*)"')
 LIVEWIRE_TOKEN_RE = re.compile(r"window\.livewire_token = '([^']+)'")
+PROGRAM_TITLE_RE = re.compile(r"(?P<code>\d{2}\.\d{2}\.\d{2})\s*(?P<name>.*)")
 
 
 class SourceSchemaError(RuntimeError):
@@ -35,6 +36,43 @@ class RgrtuLivewireListAdapter:
         self.endpoint_url = f"{self.base_url}/livewire/message/{COMPONENT_NAME}"
 
     async def fetch_tracked_competitions(self, *, category_scope: str = "general") -> list[CompetitionList]:
+        competition_payloads = await self._fetch_competition_payloads()
+
+        competitions: list[CompetitionList] = []
+        for program in PROGRAMS:
+            if category_scope == "all":
+                competitions.extend(self._build_all_category_competitions(competition_payloads, program))
+                continue
+            competitions.append(
+                self._build_tracked_competition(competition_payloads, program, Funding.BUDGET)
+            )
+        return competitions
+
+    async def fetch_all_full_time_competitions(self) -> list[CompetitionList]:
+        competition_payloads = await self._fetch_competition_payloads()
+        competitions: list[CompetitionList] = []
+        for payload in competition_payloads:
+            if str(payload.get("eduProgramFormCode") or "") != "1":
+                continue
+            program_info = program_info_for_competition_payload(payload)
+            if program_info is None:
+                continue
+            program_code, program_name = program_info
+            competition_id = str(payload["id"])
+            competitions.append(
+                parse_competition_payload(
+                    payload,
+                    program_code=program_code,
+                    program_name=program_name,
+                    funding_type=funding_for_competition_payload(payload),
+                    places=_int_or_none(payload.get("plan")) or 0,
+                    source_url=self._competition_source_url(competition_id),
+                    campaign_id=self.settings.rgrtu_campaign_id,
+                )
+            )
+        return competitions
+
+    async def _fetch_competition_payloads(self) -> list[dict[str, Any]]:
         async with httpx.AsyncClient(
             timeout=30,
             follow_redirects=True,
@@ -45,17 +83,7 @@ class RgrtuLivewireListAdapter:
             response.raise_for_status()
             component = extract_livewire_component(response.text)
             memo_data = extract_livewire_memo_data(component)
-            competition_payloads = extract_competitions_from_memo(memo_data)
-
-            competitions: list[CompetitionList] = []
-            for program in PROGRAMS:
-                if category_scope == "all":
-                    competitions.extend(self._build_all_category_competitions(competition_payloads, program))
-                    continue
-                competitions.append(
-                    self._build_tracked_competition(competition_payloads, program, Funding.BUDGET)
-                )
-            return competitions
+            return extract_competitions_from_memo(memo_data)
 
     def _build_all_category_competitions(
         self,
@@ -204,6 +232,26 @@ def competition_code_for_funding(funding: Funding) -> str:
 def funding_for_competition_payload(payload: dict[str, Any]) -> Funding:
     code = str(payload.get("code") or "")
     return Funding.PAID if code in PAID_COMPETITION_CODES else Funding.BUDGET
+
+
+def program_info_for_competition_payload(payload: dict[str, Any]) -> tuple[str, str] | None:
+    candidates = [str(payload.get("programSetPrintTitle") or "")]
+    edu_programs = payload.get("eduPrograms")
+    if isinstance(edu_programs, list):
+        candidates.extend(
+            str(item.get("fullTitleWithoutSubjectIndex") or "")
+            for item in edu_programs
+            if isinstance(item, dict)
+        )
+
+    for candidate in candidates:
+        match = PROGRAM_TITLE_RE.match(candidate.strip())
+        if match is None:
+            continue
+        code = match.group("code")
+        name = match.group("name").strip(" -")
+        return code, name or code
+    return None
 
 
 def _matches_program(competition: dict[str, Any], program: ProgramConfig) -> bool:

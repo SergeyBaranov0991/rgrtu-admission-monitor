@@ -22,13 +22,16 @@ def _settings(tmp_path) -> Settings:
 def _estimate(
     code: str,
     *,
+    funding_type: str = "budget",
+    admission_basis: str = "general",
     target_found: bool | None = None,
     target_priority: int | None = None,
 ) -> AdmissionEstimate:
     return AdmissionEstimate(
         program_code=code,
         program_name=f"Направление {code}",
-        funding_type="budget",
+        funding_type=funding_type,
+        admission_basis=admission_basis,
         places=10,
         target_score=195,
         raw_position=None,
@@ -145,7 +148,7 @@ async def test_onboarding_with_entrant_code_does_not_ask_priorities(tmp_path) ->
 
     assert "код из сервиса приема" in prompt
     assert "Профиль сохранен" in reply
-    assert "Приоритеты будут определяться" in reply
+    assert "Первый запрос статуса найдет до 5 направлений" in reply
     assert "Шаг 2" not in reply
     session_factory = build_session_factory(settings.database_url)
     with session_factory() as session:
@@ -183,6 +186,40 @@ async def test_onboarding_with_score_requires_program_priorities(tmp_path) -> No
         assert saved.program_priorities_json is not None
         assert '"code": "01.03.02"' in saved.program_priorities_json
         assert saved.pending_action is None
+
+
+async def test_first_code_status_discovers_and_saves_program_profile(tmp_path, monkeypatch) -> None:
+    settings = _settings(tmp_path)
+    calls: list[dict] = []
+
+    async def fake_estimate_from_live(*args, **kwargs) -> list[AdmissionEstimate]:
+        calls.append({"args": args, "kwargs": kwargs})
+        return [
+            _estimate("09.03.03", target_found=True, target_priority=2),
+            _estimate("01.03.02", target_found=True, target_priority=1),
+            _estimate("09.03.03", funding_type="paid", admission_basis="По договору", target_found=True, target_priority=2),
+            _estimate("09.03.02", target_found=False),
+        ]
+
+    monkeypatch.setattr(commands, "estimate_from_live", fake_estimate_from_live)
+
+    await handle_command(CommandContext(user_id="tg:123", text="/code 1158236", settings=settings))
+    reply = await handle_command(CommandContext(user_id="tg:123", text=RELATIVE_STATUS_BUTTON_TEXT, settings=settings))
+
+    assert calls[0]["kwargs"]["search_all_full_time"] is True
+    assert calls[0]["kwargs"]["relative"] is True
+    assert "01.03.02" in reply
+    assert "09.03.03" in reply
+    assert "09.03.02" not in reply
+    session_factory = build_session_factory(settings.database_url)
+    with session_factory() as session:
+        saved = session.scalar(select(UserSettings).where(UserSettings.max_user_id == "tg:123"))
+        assert saved is not None
+        assert saved.program_priorities_json is not None
+        assert '"code": "01.03.02"' in saved.program_priorities_json
+        assert '"priority": 1' in saved.program_priorities_json
+        assert '"code": "09.03.03"' in saved.program_priorities_json
+        assert '"code": "09.03.02"' not in saved.program_priorities_json
 
 
 def test_program_profile_applies_only_to_score_profile() -> None:

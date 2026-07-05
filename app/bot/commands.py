@@ -15,6 +15,7 @@ from app.bot.keyboards import (
 from app.bot.messages import render_help, render_programs, render_status
 from app.bot.profile import (
     ProfileParseError,
+    ProgramPriority,
     decode_program_priorities,
     encode_program_priorities,
     format_program_priorities,
@@ -25,6 +26,7 @@ from app.bot.user_settings import UserSettingsStore
 from app.config import Settings, get_program
 from app.db.models import UserSettings
 from app.jobs.check_lists import estimate_from_live
+from app.rgrtu.base import SourceStatus
 
 SETUP_PROGRAMS_ACTION = "setup_programs"
 SETUP_IDENTITY_ACTION = "setup_identity"
@@ -54,10 +56,10 @@ async def handle_command(context: CommandContext) -> str:
         return _handle_pending_input(user_settings, text, store)
 
     if is_status_request(text):
-        return await _render_current_status(context.settings, user_settings, relative=False)
+        return await _render_current_status(context.settings, user_settings, store, relative=False)
 
     if is_relative_status_request(text):
-        return await _render_current_status(context.settings, user_settings, relative=True)
+        return await _render_current_status(context.settings, user_settings, store, relative=True)
 
     if is_search_by_score_request(text):
         if user_settings is None:
@@ -206,6 +208,7 @@ def _set_onboarding_identity(settings: UserSettings, text: str, store: UserSetti
 
     if len(value) > 3:
         settings.entrant_code = value
+        settings.program_priorities_json = None
         settings.search_profile = "code"
         settings.pending_action = None
         store.save(settings)
@@ -223,7 +226,7 @@ def _single_number_from_text(text: str) -> str | None:
 
 def _onboarding_complete_message(settings: UserSettings) -> str:
     note = (
-        "Приоритеты будут определяться по опубликованным строкам с вашим кодом заявки."
+        "Первый запрос статуса найдет до 5 направлений по этому коду и сохранит их в профиль."
         if settings.search_profile == "code"
         else "Для режима по баллу используется заданный вручную порядок направлений."
     )
@@ -273,10 +276,14 @@ def _set_entrant_code(settings: UserSettings | None, value: str, store: UserSett
     if not code.isdigit():
         return "Укажите код из сервиса приема числом: /code 1158236"
     settings.entrant_code = code
+    settings.program_priorities_json = None
     settings.search_profile = "code"
     settings.pending_action = None
     store.save(settings)
-    return f"Код из сервиса приема {code} сохранен."
+    return (
+        f"Код из сервиса приема {code} сохранен. "
+        "Следующий запрос статуса найдет до 5 направлений по этому коду и сохранит их в профиль."
+    )
 
 
 def _set_scope(settings: UserSettings | None, value: str, store: UserSettingsStore) -> str:
@@ -316,6 +323,7 @@ def _set_debug(settings: UserSettings | None, value: str, store: UserSettingsSto
 async def _render_current_status(
     settings: Settings,
     user_settings: UserSettings | None,
+    store: UserSettingsStore,
     *,
     relative: bool,
 ) -> str:
@@ -324,14 +332,20 @@ async def _render_current_status(
     entrant_code = _entrant_code_for_status(user_settings)
     if user_settings and user_settings.search_profile == "code" and not entrant_code:
         return "Профиль поиска: по коду. Сначала задайте код кнопкой «Искать по коду» или командой /code 1158236."
+    search_all_full_time = bool(user_settings and user_settings.search_profile == "code" and entrant_code)
     estimates = await estimate_from_live(
         score,
         settings,
         category_scope=scope,
         entrant_code=entrant_code,
         relative=relative,
+        search_all_full_time=search_all_full_time,
     )
-    estimates = _apply_program_profile(estimates, user_settings)
+    if user_settings is not None and entrant_code and user_settings.search_profile == "code":
+        _save_discovered_code_profile(user_settings, estimates, store)
+    estimates = _apply_program_profile(estimates, user_settings, category_scope=scope)
+    if search_all_full_time and not estimates:
+        return f"Код {entrant_code} не найден в загруженных очных списках РГРТУ."
     return render_status(
         estimates,
         score=score,
@@ -399,11 +413,17 @@ def _debug_enabled(settings: UserSettings | None) -> bool:
 def _apply_program_profile(
     estimates: list[AdmissionEstimate],
     settings: UserSettings | None,
+    *,
+    category_scope: str = "general",
 ) -> list[AdmissionEstimate]:
     if settings is None:
         return estimates
     if settings.search_profile == "code":
-        return _sort_code_profile_estimates(estimates)
+        return _sort_code_profile_estimates(
+            estimates,
+            program_priorities=program_priority_map(settings.program_priorities_json),
+            category_scope=category_scope,
+        )
     if settings.search_profile != "score":
         return estimates
     priorities = program_priority_map(settings.program_priorities_json)
@@ -421,18 +441,79 @@ def _apply_program_profile(
     )
 
 
-def _sort_code_profile_estimates(estimates: list[AdmissionEstimate]) -> list[AdmissionEstimate]:
-    if not any(estimate.target_found is True for estimate in estimates):
-        return estimates
+def _save_discovered_code_profile(
+    settings: UserSettings,
+    estimates: list[AdmissionEstimate],
+    store: UserSettingsStore,
+) -> None:
+    if decode_program_priorities(settings.program_priorities_json):
+        return
+    discovered = _discover_code_program_priorities(estimates)
+    if not discovered:
+        return
+    settings.program_priorities_json = encode_program_priorities(discovered)
+    store.save(settings)
+
+
+def _discover_code_program_priorities(estimates: list[AdmissionEstimate]) -> list[ProgramPriority]:
+    discovered: dict[str, ProgramPriority] = {}
+    for estimate in estimates:
+        if estimate.target_found is not True or estimate.target_priority is None:
+            continue
+        current = discovered.get(estimate.program_code)
+        if current is not None and current.priority <= estimate.target_priority:
+            continue
+        discovered[estimate.program_code] = ProgramPriority(
+            code=estimate.program_code,
+            priority=estimate.target_priority,
+            name=estimate.program_name,
+        )
+    return sorted(discovered.values(), key=lambda item: (item.priority, item.code))[:5]
+
+
+def _sort_code_profile_estimates(
+    estimates: list[AdmissionEstimate],
+    *,
+    program_priorities: dict[str, int],
+    category_scope: str,
+) -> list[AdmissionEstimate]:
+    if program_priorities:
+        selected = [
+            estimate
+            for estimate in estimates
+            if estimate.program_code in program_priorities
+            and estimate.target_found is True
+            and _matches_category_scope(estimate, category_scope)
+        ]
+    else:
+        selected = [
+            estimate
+            for estimate in estimates
+            if estimate.target_found is True and _matches_category_scope(estimate, category_scope)
+        ]
+    if not selected:
+        if any(estimate.source_status != SourceStatus.OK for estimate in estimates):
+            return estimates
+        return []
     funding_order = {"budget": 0, "paid": 1}
     return sorted(
-        [estimate for estimate in estimates if estimate.target_found is True],
+        selected,
         key=lambda estimate: (
-            estimate.target_priority if estimate.target_priority is not None else 10**9,
+            program_priorities.get(
+                estimate.program_code,
+                estimate.target_priority if estimate.target_priority is not None else 10**9,
+            ),
             funding_order.get(estimate.funding_type, 9),
             estimate.program_code,
         ),
     )
+
+
+def _matches_category_scope(estimate: AdmissionEstimate, category_scope: str) -> bool:
+    if category_scope == "all":
+        return True
+    basis = estimate.admission_basis.strip().casefold()
+    return estimate.funding_type == "budget" and basis in {"", "general", "общий конкурс"}
 
 
 def _render_settings(settings: UserSettings | None) -> str:
@@ -442,7 +523,9 @@ def _render_settings(settings: UserSettings | None) -> str:
     code = settings.entrant_code or "не задан"
     debug = "включен" if _debug_enabled(settings) else "выключен"
     program_priorities = (
-        "берутся из списков РГРТУ по коду заявки"
+        format_program_priorities(settings.program_priorities_json)
+        if settings.program_priorities_json
+        else "будут найдены при первом запросе статуса по коду заявки"
         if settings.search_profile == "code" and settings.entrant_code
         else format_program_priorities(settings.program_priorities_json)
     )

@@ -83,7 +83,7 @@ def test_relative_estimate_uses_filtered_position_for_target_code() -> None:
     assert estimate.zone == AdmissionZone.PASSING
 
 
-def test_relative_estimate_marks_target_passing_higher_priority() -> None:
+def test_relative_estimate_keeps_target_in_lower_priority_lists() -> None:
     higher = _competition(
         "01.03.02",
         places=1,
@@ -107,7 +107,29 @@ def test_relative_estimate_marks_target_passing_higher_priority() -> None:
         entrant_code="target",
     )[1]
 
-    assert estimate.zone == AdmissionZone.HIGHER_PRIORITY
-    assert estimate.raw_position is None
+    assert estimate.zone == AdmissionZone.PASSING
+    assert estimate.raw_position == (1, 1)
     assert estimate.target_found is True
-    assert estimate.relative_excluded_by == "01.03.02 Направление 01.03.02 - бюджет"
+    assert estimate.target_priority == 2
+    assert estimate.relative_excluded_by is None
+
+
+def test_relative_estimate_drops_priorities_lower_than_target_priority() -> None:
+    current = _competition(
+        "09.03.03",
+        places=2,
+        rows=[
+            ApplicantRow(anonymous_applicant_id="priority-1", total_score=260, priority=1),
+            ApplicantRow(anonymous_applicant_id="lower-priority", total_score=250, priority=4),
+            ApplicantRow(anonymous_applicant_id="target", total_score=230, priority=3),
+        ],
+    )
+
+    estimate = estimate_relative_competitions(
+        [current],
+        100,
+        entrant_code="target",
+    )[0]
+
+    assert estimate.raw_position == (2, 2)
+    assert estimate.relative_rows_count == 2

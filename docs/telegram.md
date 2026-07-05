@@ -21,9 +21,10 @@ The reply keyboard includes both status modes:
   the selected category scope.
 
 Use `/setup` to configure a chat. The first answer is either the RGRTU service entrant code or a
-score. A long numeric code completes setup immediately: the bot derives specialties and priorities
-from RGRTU rows with that code. A 3-digit score switches to score mode and asks for manual specialty
-priorities in the form `01.03.02;1`; those manual priorities are used only in score mode.
+score. A long numeric code completes setup immediately; the first status request then loads all
+full-time RGRTU competitions, finds up to 5 specialties where that code appears, and saves them to
+the chat profile. A 3-digit score switches to score mode and asks for manual specialty priorities in
+the form `01.03.02;1`; those manual priorities are used only in score mode.
 
 Status replies are compact by default. Send `/debug` to toggle detailed output for the current chat;
 send `/debug on` or `/debug off` to set it explicitly. Detailed output includes source status,

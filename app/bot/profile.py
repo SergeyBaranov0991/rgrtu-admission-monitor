@@ -12,6 +12,7 @@ from app.config import get_program
 class ProgramPriority:
     code: str
     priority: int
+    name: str | None = None
 
 
 class ProfileParseError(ValueError):
@@ -23,7 +24,7 @@ _PROGRAM_PRIORITY_PATTERN = re.compile(r"(?P<code>\d{2}\.\d{2}\.\d{2})\s*[;,]\s*
 
 def parse_program_priorities(text: str) -> list[ProgramPriority]:
     pairs = [
-        ProgramPriority(code=match.group("code"), priority=int(match.group("priority")))
+        _program_priority(match.group("code"), int(match.group("priority")))
         for match in _PROGRAM_PRIORITY_PATTERN.finditer(text)
     ]
     if not pairs:
@@ -50,6 +51,7 @@ def encode_program_priorities(priorities: Iterable[ProgramPriority]) -> str:
             {
                 "code": item.code,
                 "priority": item.priority,
+                "name": item.name,
             }
             for item in sorted(priorities, key=lambda item: item.priority)
         ],
@@ -73,11 +75,12 @@ def decode_program_priorities(value: str | None) -> list[ProgramPriority]:
             continue
         code = item.get("code")
         priority = item.get("priority")
+        name = item.get("name")
         if not isinstance(code, str) or not isinstance(priority, int):
             continue
-        if get_program(code) is None or priority < 1 or priority > 5:
+        if priority < 1 or priority > 5:
             continue
-        priorities.append(ProgramPriority(code=code, priority=priority))
+        priorities.append(ProgramPriority(code=code, priority=priority, name=name if isinstance(name, str) else None))
     return sorted(priorities, key=lambda item: item.priority)
 
 
@@ -88,10 +91,16 @@ def format_program_priorities(value: str | None) -> str:
     lines: list[str] = []
     for item in priorities:
         program = get_program(item.code)
-        name = f" {program.name}" if program else ""
+        name_value = item.name or (program.name if program else None)
+        name = f" {name_value}" if name_value else ""
         lines.append(f"{item.priority}. {item.code}{name}")
     return "\n".join(lines)
 
 
 def program_priority_map(value: str | None) -> dict[str, int]:
     return {item.code: item.priority for item in decode_program_priorities(value)}
+
+
+def _program_priority(code: str, priority: int) -> ProgramPriority:
+    program = get_program(code)
+    return ProgramPriority(code=code, priority=priority, name=program.name if program else None)
