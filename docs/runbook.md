@@ -3,11 +3,11 @@
 ## Containers
 
 ```bash
-cd /opt/rgrtu-max-bot
+cd "${DEPLOY_MAX_PATH}"
 docker compose -p rgrtu-max-bot -f docker-compose.yml ps
 docker compose -p rgrtu-max-bot -f docker-compose.yml logs --tail=200 bot
 
-cd /opt/rgrtu-tg-bot
+cd "${DEPLOY_PATH}"
 docker compose -p rgrtu-tg-bot -f docker-compose.tg.yml ps
 docker compose -p rgrtu-tg-bot -f docker-compose.tg.yml logs --tail=200 tg-bot
 ```
@@ -32,8 +32,8 @@ python -m app.cli discover
 ## Health
 
 ```bash
-curl -fsS https://rgrtu.194.226.163.137.sslip.io/health/ready
-curl -fsS https://rgrtu.194.226.163.137.sslip.io/health/live
+curl -fsS https://<max-public-host>/health/ready
+curl -fsS https://<max-public-host>/health/live
 ```
 
 ## Deploy
@@ -44,14 +44,14 @@ compose projects on the VPS.
 Manual MAX redeploy:
 
 ```bash
-cd /opt/rgrtu-max-bot
+cd "${DEPLOY_MAX_PATH}"
 docker compose -p rgrtu-max-bot -f docker-compose.yml up -d --build --remove-orphans
 ```
 
 Manual Telegram redeploy:
 
 ```bash
-cd /opt/rgrtu-tg-bot
+cd "${DEPLOY_PATH}"
 docker compose -p rgrtu-tg-bot -f docker-compose.tg.yml up -d --build --force-recreate
 ```
 

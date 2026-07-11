@@ -14,17 +14,29 @@ docker compose -p rgrtu-tg-bot -f docker-compose.tg.yml up -d --build
 Use `/start` in Telegram. Telegram access is not restricted by chat id; every chat gets its own
 saved score/code/category/onboarding settings under `tg:<chat_id>`.
 
-The reply keyboard includes both status modes:
+The reply keyboard groups status, profile setup, specialty scope, and category scope:
 
-- `Актуальный статус вне приоритетов` uses the published list order/scores.
-- `Актуальный относительный статус` filters applicants that already pass by a higher priority within
-  the selected category scope.
+- `Статус с приоритетами` filters applicants only when the same code already passes by a
+  higher priority. Budget and paid lists are evaluated independently.
+- `Статус без приоритетов` uses the published list order/scores.
+- `Настроить профиль` starts onboarding for a score or RGRTU service entrant code.
+- `Показать настройки` shows the saved chat profile.
+- `Мои направления` sets manual specialty priorities for score search.
+- `Все направления` clears manual priorities and checks all full-time RGRTU specialties by score.
+- `Общий конкурс` and `Все категории` switch category scope.
 
 Use `/setup` to configure a chat. The first answer is either the RGRTU service entrant code or a
 score. A long numeric code completes setup immediately; the first status request then loads all
 full-time RGRTU competitions, finds up to 5 specialties where that code appears, and saves them to
-the chat profile. A 3-digit score switches to score mode and asks for manual specialty priorities in
-the form `01.03.02;1`; those manual priorities are used only in score mode.
+the chat profile. A 3-digit score switches to score mode and checks all full-time RGRTU specialties
+by default. Use `Мои направления` or `/my_programs` to narrow score search to manual specialty
+priorities in the form `01.03.02;1`; use `Все направления` or `/all_programs` to return to all
+full-time specialties.
+
+For a code-based relative status, the filter is built from all full-time RGRTU competitions before
+the reply is narrowed back to the saved chat profile. A lower-priority applicant remains in the
+current list unless that applicant passes by a higher priority elsewhere. This mode does not filter
+the list down to applicants with submitted enrollment consent.
 
 Status replies are compact by default. Send `/debug` to toggle detailed output for the current chat;
 send `/debug on` or `/debug off` to set it explicitly. Detailed output includes source status,
@@ -35,7 +47,7 @@ Changes pushed to `main` run lint/tests and recreate the TG container through th
 ## VPS side-by-side run
 
 ```bash
-cd /opt/rgrtu-tg-bot
+cd "${DEPLOY_PATH}"
 docker compose -p rgrtu-tg-bot -f docker-compose.tg.yml up -d --build
 docker compose -p rgrtu-tg-bot -f docker-compose.tg.yml logs --tail=100 tg-bot
 ```

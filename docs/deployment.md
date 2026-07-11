@@ -9,14 +9,15 @@ The MAX compose file binds Caddy to `127.0.0.1:${CADDY_HTTPS_HOST_PORT:-9443}`. 
 host-level routing in front of that port is server-specific infrastructure and is kept outside this
 repository.
 
-Current production VPS: `194.226.163.137`.
-Current public MAX webhook base URL: `https://rgrtu.194.226.163.137.sslip.io`.
+Production hostnames, IP addresses, SSH users, and filesystem paths are deployment-specific and are
+not stored in the public repository. Keep local operational notes in `docs/local/`; that directory
+is ignored by git.
 
 1. Copy `.env.example` to `.env` and fill MAX secrets.
-2. Point the domain to the VPS, or use the configured `sslip.io` DNS name.
-3. Replace `rgrtu.194.226.163.137.sslip.io` in `Caddyfile` if a dedicated domain is assigned later.
+2. Set `MAX_PUBLIC_HOST` in `.env` to the public hostname routed to this bot.
+3. Point the domain to the VPS or configure the host-level reverse proxy.
 4. Run `docker compose -p rgrtu-max-bot -f docker-compose.yml up -d --build --remove-orphans`.
-5. Check `https://rgrtu.194.226.163.137.sslip.io/health/ready`.
+5. Check `https://<max-public-host>/health/ready`.
 6. Register webhook with `python scripts/register_webhook.py`.
 
 The app remains ready when RGRTU or MAX is temporarily unavailable.
@@ -30,13 +31,22 @@ python -m ruff check .
 pytest -q
 ```
 
-If the `DEPLOY_SSH_KEY` repository secret is configured, the workflow syncs the checkout to:
+Configure these GitHub repository secrets for deployment:
 
-- `/opt/rgrtu-tg-bot`
-- `/opt/rgrtu-max-bot`
+```text
+DEPLOY_SSH_KEY=<private SSH key with access to the server>
+DEPLOY_HOST=<deployment host>
+DEPLOY_USER=<ssh user>
+DEPLOY_PATH=<Telegram bot path on the host>
+DEPLOY_MAX_PATH=<MAX bot path on the host>
+```
 
-Then it recreates both compose projects. Local `.env`, `.env.tg`, `.venv`, `data`, and `output`
-directories on the server are not overwritten by rsync.
+If all deploy secrets are configured, the workflow syncs the checkout to the configured Telegram and
+MAX paths and recreates both compose projects. Local `.env`, `.env.tg`, `.env.local`,
+`.env.*.local`, `.venv`, `Caddyfile.local`, `data`, `docs/local`, and `output` paths on the server
+are not overwritten by rsync.
+
+If any deploy secret is absent, the workflow keeps CI green and skips deployment with a notice.
 
 ## Existing VPS with another project
 

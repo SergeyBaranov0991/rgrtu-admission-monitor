@@ -54,10 +54,11 @@ async def estimate_from_live(
     relative: bool = False,
     search_all_full_time: bool = False,
 ) -> list[AdmissionEstimate]:
+    load_all_full_time = search_all_full_time or bool(relative and entrant_code)
     try:
         competitions = (
             await load_all_full_time_competitions(settings)
-            if search_all_full_time
+            if load_all_full_time
             else await load_live_competitions(settings, category_scope=category_scope)
         )
     except SourceSchemaError as exc:
@@ -118,13 +119,13 @@ def estimate_relative_competitions(
                 selection=selection,
                 competition_index=index,
                 entrant_code=entrant_code,
-                target_priority=original_target.priority,
             )
             estimate = estimate_competition_by_code(
                 filtered,
                 entrant_code,
                 fallback_score=score,
                 use_row_position=False,
+                use_filtered_order_position=True,
             ).model_copy(
                 update={
                     "target_priority": original_target.priority,
@@ -167,7 +168,6 @@ def _target_relative_competition(
     selection: RelativeSelection,
     competition_index: int,
     entrant_code: str,
-    target_priority: int | None,
 ) -> CompetitionList:
     rows = []
     for row in competition.rows:
@@ -176,8 +176,6 @@ def _target_relative_competition(
             continue
         if key == entrant_code:
             rows.append(row)
-            continue
-        if target_priority is not None and row.priority is not None and row.priority > target_priority:
             continue
         if (competition_index, key) in selection.exclusions:
             continue

@@ -16,6 +16,8 @@ services:
   caddy:
     image: caddy:2
     restart: unless-stopped
+    environment:
+      MAX_PUBLIC_HOST: ${MAX_PUBLIC_HOST:-localhost}
     ports:
       - "127.0.0.1:${CADDY_HTTPS_HOST_PORT:-9443}:443"
     volumes:

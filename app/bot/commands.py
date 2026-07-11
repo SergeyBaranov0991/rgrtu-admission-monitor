@@ -4,12 +4,17 @@ from dataclasses import dataclass
 import re
 
 from app.admission.estimator import AdmissionEstimate
+from app.admission.zones import AdmissionZone
 from app.bot.keyboards import (
     is_all_categories_request,
+    is_all_programs_request,
     is_general_only_request,
+    is_my_programs_request,
     is_relative_status_request,
     is_search_by_code_request,
     is_search_by_score_request,
+    is_settings_request,
+    is_setup_request,
     is_status_request,
 )
 from app.bot.messages import render_help, render_programs, render_status
@@ -30,6 +35,7 @@ from app.rgrtu.base import SourceStatus
 
 SETUP_PROGRAMS_ACTION = "setup_programs"
 SETUP_IDENTITY_ACTION = "setup_identity"
+SCORE_ALL_COMPACT_LIMIT = 15
 
 
 @dataclass
@@ -48,6 +54,10 @@ async def handle_command(context: CommandContext) -> str:
         or is_relative_status_request(text)
         or is_search_by_score_request(text)
         or is_search_by_code_request(text)
+        or is_setup_request(text)
+        or is_settings_request(text)
+        or is_my_programs_request(text)
+        or is_all_programs_request(text)
         or is_general_only_request(text)
         or is_all_categories_request(text)
     )
@@ -60,6 +70,18 @@ async def handle_command(context: CommandContext) -> str:
 
     if is_relative_status_request(text):
         return await _render_current_status(context.settings, user_settings, store, relative=True)
+
+    if is_setup_request(text):
+        return _start_onboarding(user_settings, store)
+
+    if is_settings_request(text):
+        return _render_settings(user_settings)
+
+    if is_my_programs_request(text):
+        return _start_manual_programs(user_settings, store)
+
+    if is_all_programs_request(text):
+        return _set_all_programs(user_settings, store)
 
     if is_search_by_score_request(text):
         if user_settings is None:
@@ -151,7 +173,7 @@ def _needs_onboarding(settings: UserSettings | None) -> bool:
         return False
     if settings.search_profile == "code":
         return not bool(settings.entrant_code)
-    return not bool(decode_program_priorities(settings.program_priorities_json))
+    return False
 
 
 def _start_onboarding(settings: UserSettings | None, store: UserSettingsStore) -> str:
@@ -196,15 +218,10 @@ def _set_onboarding_identity(settings: UserSettings, text: str, store: UserSetti
         settings.exam_score = score
         settings.achievements = 0
         settings.search_profile = "score"
-        settings.pending_action = SETUP_PROGRAMS_ACTION
+        settings.program_priorities_json = None
+        settings.pending_action = None
         store.save(settings)
-        return (
-            f"Балл {score} сохранен.\n\n"
-            "Шаг 2. Так как кода заявки нет, отправьте направления и их приоритеты, каждое с новой строки:\n"
-            "01.03.02;1\n"
-            "09.03.03;2\n\n"
-            "Приоритеты не должны повторяться. Список направлений можно посмотреть командой /programs."
-        )
+        return _onboarding_complete_message(settings)
 
     if len(value) > 3:
         settings.entrant_code = value
@@ -225,16 +242,51 @@ def _single_number_from_text(text: str) -> str | None:
 
 
 def _onboarding_complete_message(settings: UserSettings) -> str:
-    note = (
-        "Первый запрос статуса найдет до 5 направлений по этому коду и сохранит их в профиль."
-        if settings.search_profile == "code"
-        else "Для режима по баллу используется заданный вручную порядок направлений."
-    )
+    if settings.search_profile == "code":
+        note = "Первый запрос статуса найдет до 5 направлений по этому коду и сохранит их в профиль."
+    elif decode_program_priorities(settings.program_priorities_json):
+        note = "Для режима по баллу используется заданный вручную порядок направлений."
+    else:
+        note = "Для режима по баллу будут проверяться все очные направления РГРТУ."
     return (
         "Профиль сохранен для этого чата.\n\n"
         f"{note}\n\n"
         f"{_render_settings(settings)}\n\n"
-        "Теперь нажмите кнопку актуального статуса или отправьте /relative."
+        "Теперь нажмите кнопку статуса или отправьте /relative."
+    )
+
+
+def _start_manual_programs(settings: UserSettings | None, store: UserSettingsStore) -> str:
+    if settings is None:
+        return "Не удалось изменить направления: не определен пользователь."
+    settings.search_profile = "score"
+    settings.pending_action = SETUP_PROGRAMS_ACTION
+    store.save(settings)
+    current = (
+        f"\n\nТекущий список:\n{format_program_priorities(settings.program_priorities_json)}"
+        if settings.program_priorities_json
+        else ""
+    )
+    return (
+        "Режим направлений: мои направления.\n"
+        "Отправьте направления и их приоритеты, каждое с новой строки:\n"
+        "01.03.02;1\n"
+        "09.03.03;2\n\n"
+        "После сохранения статус по баллу будет показывать только эти направления."
+        f"{current}"
+    )
+
+
+def _set_all_programs(settings: UserSettings | None, store: UserSettingsStore) -> str:
+    if settings is None:
+        return "Не удалось изменить направления: не определен пользователь."
+    settings.search_profile = "score"
+    settings.program_priorities_json = None
+    settings.pending_action = None
+    store.save(settings)
+    return (
+        "Режим направлений: все очные направления РГРТУ.\n"
+        f"Профиль поиска: по баллу. Текущий конкурсный балл: {_user_total_score(settings)}."
     )
 
 
@@ -331,8 +383,9 @@ async def _render_current_status(
     scope = _category_scope(user_settings)
     entrant_code = _entrant_code_for_status(user_settings)
     if user_settings and user_settings.search_profile == "code" and not entrant_code:
-        return "Профиль поиска: по коду. Сначала задайте код кнопкой «Искать по коду» или командой /code 1158236."
-    search_all_full_time = bool(user_settings and user_settings.search_profile == "code" and entrant_code)
+        return "Профиль поиска: по коду. Сначала задайте код через «Настроить профиль» или командой /code 1158236."
+    score_all_full_time = _is_score_all_programs(user_settings)
+    search_all_full_time = bool(user_settings and user_settings.search_profile == "code" and entrant_code) or score_all_full_time
     estimates = await estimate_from_live(
         score,
         settings,
@@ -344,8 +397,13 @@ async def _render_current_status(
     if user_settings is not None and entrant_code and user_settings.search_profile == "code":
         _save_discovered_code_profile(user_settings, estimates, store)
     estimates = _apply_program_profile(estimates, user_settings, category_scope=scope)
-    if search_all_full_time and not estimates:
+    if entrant_code and search_all_full_time and not estimates:
         return f"Код {entrant_code} не найден в загруженных очных списках РГРТУ."
+    estimates, omitted_count = _limit_estimates_for_status(
+        estimates,
+        score_all_programs=score_all_full_time,
+        debug=_debug_enabled(user_settings),
+    )
     return render_status(
         estimates,
         score=score,
@@ -353,6 +411,7 @@ async def _render_current_status(
         category_scope=scope,
         relative=relative,
         debug=_debug_enabled(user_settings),
+        omitted_count=omitted_count,
         tz=settings.timezone,
     )
 
@@ -410,6 +469,12 @@ def _debug_enabled(settings: UserSettings | None) -> bool:
     return bool(settings and settings.debug_enabled)
 
 
+def _is_score_all_programs(settings: UserSettings | None) -> bool:
+    if settings is None or settings.search_profile != "score":
+        return False
+    return not bool(program_priority_map(settings.program_priorities_json))
+
+
 def _apply_program_profile(
     estimates: list[AdmissionEstimate],
     settings: UserSettings | None,
@@ -428,7 +493,13 @@ def _apply_program_profile(
         return estimates
     priorities = program_priority_map(settings.program_priorities_json)
     if not priorities:
-        return estimates
+        return _sort_score_all_estimates(
+            [
+                estimate
+                for estimate in estimates
+                if _matches_category_scope(estimate, category_scope)
+            ]
+        )
     funding_order = {"budget": 0, "paid": 1}
     selected = [
         estimate.model_copy(update={"target_priority": priorities[estimate.program_code]})
@@ -443,6 +514,44 @@ def _apply_program_profile(
             estimate.program_code,
         ),
     )
+
+
+def _sort_score_all_estimates(estimates: list[AdmissionEstimate]) -> list[AdmissionEstimate]:
+    funding_order = {"budget": 0, "paid": 1}
+    zone_order = {
+        AdmissionZone.PASSING: 0,
+        AdmissionZone.BORDERLINE: 1,
+        AdmissionZone.INSUFFICIENT_DATA: 2,
+        AdmissionZone.NON_PASSING: 3,
+        AdmissionZone.SOURCE_UNAVAILABLE: 4,
+    }
+    return sorted(
+        estimates,
+        key=lambda estimate: (
+            zone_order.get(estimate.zone, 9),
+            _position_sort_key(estimate),
+            funding_order.get(estimate.funding_type, 9),
+            estimate.program_code,
+            estimate.program_name,
+        ),
+    )
+
+
+def _position_sort_key(estimate: AdmissionEstimate) -> int:
+    if estimate.raw_position is not None:
+        return estimate.raw_position[0]
+    return 10**9
+
+
+def _limit_estimates_for_status(
+    estimates: list[AdmissionEstimate],
+    *,
+    score_all_programs: bool,
+    debug: bool,
+) -> tuple[list[AdmissionEstimate], int]:
+    if not score_all_programs or debug or len(estimates) <= SCORE_ALL_COMPACT_LIMIT:
+        return estimates, 0
+    return estimates[:SCORE_ALL_COMPACT_LIMIT], len(estimates) - SCORE_ALL_COMPACT_LIMIT
 
 
 def _save_discovered_code_profile(
@@ -531,7 +640,7 @@ def _render_settings(settings: UserSettings | None) -> str:
         if settings.program_priorities_json
         else "будут найдены при первом запросе статуса по коду заявки"
         if settings.search_profile == "code" and settings.entrant_code
-        else format_program_priorities(settings.program_priorities_json)
+        else "все очные направления РГРТУ"
     )
     return "\n".join(
         [

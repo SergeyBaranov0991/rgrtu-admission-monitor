@@ -16,11 +16,10 @@ Current implementation is the first MVP slice:
 - per-chat settings stored in SQLite through `app.bot.user_settings`;
 - per-chat search profile: score or RGRTU service entrant code;
 - per-chat onboarding: code-based setup auto-discovers up to 5 specialties on the first status
-  request, score-based setup asks for specialty priorities;
+  request, score-based setup checks all full-time specialties by default and can be narrowed manually;
 - category scope switch: only general competition or all categories;
 - admission rank interval and zone estimation;
-- relative admission estimate that filters applicants passing by higher priority in the selected
-  category scope;
+- relative admission estimate that filters only applicants already passing by a higher priority;
 - live RGRTU public-list check through the official competition-list page payload;
 - RGRTU Livewire subject discovery;
 - Docker Compose and operational docs.
@@ -68,12 +67,14 @@ Actions.
 
 Both MAX and Telegram show the same reply buttons:
 
-- `Актуальный статус вне приоритетов` - refresh estimates by the published list order/scores.
-- `Актуальный относительный статус` - refresh estimates after filtering applicants that pass by a
-  higher priority within the selected category scope.
-- `Искать по баллу` - switch to score profile and wait for a numeric score.
-- `Искать по коду` - switch to RGRTU service-code profile and wait for a numeric entrant code.
-- `Только общий конкурс` - show only the main budget general-competition category.
+- `Статус с приоритетами` - refresh estimates after filtering applicants that pass by a
+  higher priority. Budget and paid lists are evaluated independently.
+- `Статус без приоритетов` - refresh estimates by the published list order/scores.
+- `Настроить профиль` - start onboarding for a score or RGRTU service entrant code.
+- `Показать настройки` - show the current chat profile.
+- `Мои направления` - set a manual specialty-priority list for score search.
+- `Все направления` - clear the manual list and check all full-time RGRTU specialties by score.
+- `Общий конкурс` - show only the main budget general-competition category.
 - `Все категории` - show quotas, target admission, general competition, and contract categories for
   the tracked full-time profile.
 
@@ -90,6 +91,8 @@ Text commands are also supported:
 /scope all
 /settings
 /debug
+/my_programs
+/all_programs
 ```
 
 Status responses are compact by default. `/debug` toggles detailed responses for the current chat;
@@ -101,31 +104,36 @@ the detailed form.
 score. If the answer is a long numeric code, the bot stores code search; the first status request
 loads all full-time RGRTU competitions, finds up to 5 specialties where that code appears, stores the
 specialty profile, and then filters status output by that profile. If the answer is a 3-digit score,
-the bot asks for manual specialty priorities in the form `01.03.02;1`; this manual profile is used
-only for score-based status filtering and ordering.
+the bot stores score search and checks all full-time RGRTU specialties by default. Use
+`Мои направления` or `/my_programs` to narrow score search to manual specialty priorities in the form
+`01.03.02;1`; use `Все направления` or `/all_programs` to return to all full-time specialties.
 
-GitHub Actions deployment uses the production host/path from
-[.github/workflows/deploy.yml](.github/workflows/deploy.yml). It needs this repository secret:
+GitHub Actions deployment does not store production hostnames, IP addresses, users, or filesystem
+paths in the public repository. Configure these repository secrets in GitHub:
 
 ```text
 DEPLOY_SSH_KEY=<private SSH key with access to the server>
+DEPLOY_HOST=<deployment host>
+DEPLOY_USER=<ssh user>
+DEPLOY_PATH=<Telegram bot path on the host>
+DEPLOY_MAX_PATH=<MAX bot path on the host>
 ```
 
-If `DEPLOY_SSH_KEY` is absent, the workflow keeps tests green and skips deploy with a notice.
-The CI gate runs `python -m ruff check .` and `pytest -q` before deploying.
+If any deploy secret is absent, the workflow keeps tests green and skips deploy with a notice. The
+CI gate runs `python -m ruff check .` and `pytest -q` before deploying.
 
 ## Side-by-side VPS deployment
 
-Production VPS: `194.226.163.137`.
-Production MAX webhook base URL: `https://rgrtu.194.226.163.137.sslip.io`.
+Production-specific values are intentionally kept out of git. Keep local notes in
+`docs/local/deployment.local.md`; this directory is ignored by git.
 
 Use `docker-compose.yml` on the dedicated bot VPS. It starts the MAX webhook app and Caddy. The
 compose file binds Caddy to `127.0.0.1:${CADDY_HTTPS_HOST_PORT:-9443}` so public routing can stay in
-server-specific infrastructure outside this repository:
+server-specific infrastructure outside this repository. Set `MAX_PUBLIC_HOST` in the local `.env`:
 
 ```bash
 docker compose -p rgrtu-max-bot -f docker-compose.yml up -d --build --remove-orphans
-curl -fsS https://rgrtu.194.226.163.137.sslip.io/health/ready
+curl -fsS https://<max-public-host>/health/ready
 ```
 
 Use `docker-compose.bot.yml` only when the VPS already has an nginx/Caddy project on ports 80/443:
@@ -152,16 +160,19 @@ The bot reads current public data from:
 use. Local Windows checks may need `--insecure` if TLS verification is intercepted; Docker trusts
 the bundled Russian CA chain.
 
-Relative status uses the same loaded competitions as the current category scope. A row with priority
-`2..5` is excluded from a lower-priority list only when the same application code is confidently
-passing in a higher-priority list. Ties on the passing boundary are kept in the lower-priority list
-unless the whole equal-score interval fits into the available places. The compact chat response only
-shows the result; `/help` and `/debug` expose the calculation details.
+Relative status excludes a row from a lower-priority list only when the same application code is
+confidently passing in another list with a higher priority. Applicants are not removed merely because
+their priority in the current list is lower than the target applicant's priority. Ties on the passing
+boundary are kept in the lower-priority list unless the whole equal-score interval fits into the
+available places. Budget and paid competitions are filtered separately because they use separate
+priority sequences. This mode is priority-aware but does not filter the list down to applicants with
+submitted enrollment consent; a consent/VPP-style mode should be implemented as a separate mode.
 
-For a code-based profile, the target application is kept in each of its own priority lists. If the
-target has priority `3` in a list, the relative position keeps priority `1`, filters priority `2`
-and `3` applicants that pass higher, and ignores priority `4..5` applicants for that target-list
-estimate.
+For a code-based relative profile, the bot loads all full-time RGRTU competitions first, builds the
+higher-priority filter from that full universe, and only then filters the chat response back to the
+saved specialty profile and selected category scope. The target application is kept in each of its
+own priority lists so lower-priority blocks show the conditional position if the target does not end
+up admitted by a higher priority. Relative positions use the order of the filtered published list.
 
 Chat status blocks are sorted by specialty priority and use a `Приоритет N:` prefix in the block
 heading.

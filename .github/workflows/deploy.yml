@@ -9,12 +9,6 @@ concurrency:
   group: deploy-rgrtu-bots
   cancel-in-progress: true
 
-env:
-  DEPLOY_HOST: "194.226.163.137"
-  DEPLOY_USER: "root"
-  DEPLOY_PATH: "/opt/rgrtu-tg-bot"
-  DEPLOY_MAX_PATH: "/opt/rgrtu-max-bot"
-
 jobs:
   test:
     runs-on: ubuntu-latest
@@ -34,78 +28,97 @@ jobs:
     environment: production
     env:
       DEPLOY_SSH_KEY: ${{ secrets.DEPLOY_SSH_KEY }}
+      DEPLOY_HOST: ${{ secrets.DEPLOY_HOST }}
+      DEPLOY_USER: ${{ secrets.DEPLOY_USER }}
+      DEPLOY_PATH: ${{ secrets.DEPLOY_PATH }}
+      DEPLOY_MAX_PATH: ${{ secrets.DEPLOY_MAX_PATH }}
     steps:
-      - name: Check deploy key
-        id: deploy_key
+      - name: Check deploy config
+        id: deploy_config
         run: |
-          if [ -z "${DEPLOY_SSH_KEY}" ]; then
+          missing=()
+          for name in DEPLOY_SSH_KEY DEPLOY_HOST DEPLOY_USER DEPLOY_PATH DEPLOY_MAX_PATH; do
+            if [ -z "${!name}" ]; then
+              missing+=("${name}")
+            fi
+          done
+
+          if [ "${#missing[@]}" -gt 0 ]; then
             echo "configured=false" >> "$GITHUB_OUTPUT"
-            echo "::notice::DEPLOY_SSH_KEY is not configured; skipping deploy."
+            echo "::notice::Missing deploy secrets: ${missing[*]}; skipping deploy."
           else
             echo "configured=true" >> "$GITHUB_OUTPUT"
           fi
 
       - uses: actions/checkout@v4
-        if: steps.deploy_key.outputs.configured == 'true'
+        if: steps.deploy_config.outputs.configured == 'true'
 
       - name: Add SSH key
-        if: steps.deploy_key.outputs.configured == 'true'
+        if: steps.deploy_config.outputs.configured == 'true'
         uses: webfactory/ssh-agent@v0.9.0
         with:
           ssh-private-key: ${{ env.DEPLOY_SSH_KEY }}
 
       - name: Trust server host key
-        if: steps.deploy_key.outputs.configured == 'true'
+        if: steps.deploy_config.outputs.configured == 'true'
         run: |
           mkdir -p ~/.ssh
           ssh-keyscan -H "${DEPLOY_HOST}" >> ~/.ssh/known_hosts
 
       - name: Sync project
-        if: steps.deploy_key.outputs.configured == 'true'
+        if: steps.deploy_config.outputs.configured == 'true'
         run: |
           rsync -az --delete \
             --exclude '.git' \
             --exclude '.env' \
             --exclude '.env.tg' \
+            --exclude '.env.local' \
+            --exclude '.env.*.local' \
             --exclude '.venv' \
+            --exclude 'Caddyfile.local' \
             --exclude 'data' \
+            --exclude 'docs/local' \
             --exclude 'output' \
             ./ "${DEPLOY_USER}@${DEPLOY_HOST}:${DEPLOY_PATH}/"
 
       - name: Sync MAX project
-        if: steps.deploy_key.outputs.configured == 'true'
+        if: steps.deploy_config.outputs.configured == 'true'
         run: |
           rsync -az --delete \
             --exclude '.git' \
             --exclude '.env' \
             --exclude '.env.tg' \
+            --exclude '.env.local' \
+            --exclude '.env.*.local' \
             --exclude '.venv' \
+            --exclude 'Caddyfile.local' \
             --exclude 'data' \
+            --exclude 'docs/local' \
             --exclude 'output' \
             ./ "${DEPLOY_USER}@${DEPLOY_HOST}:${DEPLOY_MAX_PATH}/"
 
       - name: Deploy Telegram bot
-        if: steps.deploy_key.outputs.configured == 'true'
+        if: steps.deploy_config.outputs.configured == 'true'
         timeout-minutes: 10
         run: |
           ssh "${DEPLOY_USER}@${DEPLOY_HOST}" \
             "cd '${DEPLOY_PATH}' && timeout 8m docker compose -p rgrtu-tg-bot -f docker-compose.tg.yml up -d --build --force-recreate"
 
       - name: Verify Telegram bot
-        if: steps.deploy_key.outputs.configured == 'true'
+        if: steps.deploy_config.outputs.configured == 'true'
         run: |
           ssh "${DEPLOY_USER}@${DEPLOY_HOST}" \
             "cd '${DEPLOY_PATH}' && docker compose -p rgrtu-tg-bot -f docker-compose.tg.yml ps"
 
       - name: Deploy MAX bot
-        if: steps.deploy_key.outputs.configured == 'true'
+        if: steps.deploy_config.outputs.configured == 'true'
         timeout-minutes: 10
         run: |
           ssh "${DEPLOY_USER}@${DEPLOY_HOST}" \
             "cd '${DEPLOY_MAX_PATH}' && timeout 8m docker compose -p rgrtu-max-bot -f docker-compose.yml up -d --build --force-recreate --remove-orphans"
 
       - name: Verify MAX bot
-        if: steps.deploy_key.outputs.configured == 'true'
+        if: steps.deploy_config.outputs.configured == 'true'
         run: |
           ssh "${DEPLOY_USER}@${DEPLOY_HOST}" \
             "cd '${DEPLOY_MAX_PATH}' && docker compose -p rgrtu-max-bot -f docker-compose.yml ps"

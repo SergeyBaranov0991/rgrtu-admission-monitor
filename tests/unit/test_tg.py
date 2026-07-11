@@ -1,6 +1,6 @@
 from app.bot.commands import CommandContext
 from app.config import Settings
-from app.bot.keyboards import STATUS_BUTTON_TEXT
+from app.bot.keyboards import RELATIVE_STATUS_BUTTON_TEXT
 from app.tg import runner
 from app.tg.client import extract_message, normalize_command
 from app.tg.client import TelegramClient
@@ -36,7 +36,7 @@ async def test_send_message_adds_status_keyboard(monkeypatch) -> None:
     await client.send_message("123", "hello")
 
     assert calls[0]["method"] == "sendMessage"
-    assert calls[0]["payload"]["reply_markup"]["keyboard"][0] == [{"text": STATUS_BUTTON_TEXT}]
+    assert calls[0]["payload"]["reply_markup"]["keyboard"][0] == [{"text": RELATIVE_STATUS_BUTTON_TEXT}]
 
 
 async def test_runner_accepts_any_chat_id(monkeypatch) -> None:

@@ -6,8 +6,12 @@ from app.bot import commands
 from app.bot.commands import CommandContext, handle_command
 from app.bot.keyboards import (
     ALL_CATEGORIES_BUTTON_TEXT,
+    ALL_PROGRAMS_BUTTON_TEXT,
+    MY_PROGRAMS_BUTTON_TEXT,
     RELATIVE_STATUS_BUTTON_TEXT,
     SEARCH_BY_CODE_BUTTON_TEXT,
+    SETTINGS_BUTTON_TEXT,
+    SETUP_BUTTON_TEXT,
 )
 from app.config import Settings
 from app.db.models import UserSettings
@@ -26,6 +30,8 @@ def _estimate(
     admission_basis: str = "general",
     target_found: bool | None = None,
     target_priority: int | None = None,
+    raw_position: tuple[int, int] | None = None,
+    zone: AdmissionZone = AdmissionZone.INSUFFICIENT_DATA,
 ) -> AdmissionEstimate:
     return AdmissionEstimate(
         program_code=code,
@@ -34,11 +40,11 @@ def _estimate(
         admission_basis=admission_basis,
         places=10,
         target_score=195,
-        raw_position=None,
+        raw_position=raw_position,
         effective_position=None,
         current_passing_score=None,
         forecast_passing_score=None,
-        zone=AdmissionZone.INSUFFICIENT_DATA,
+        zone=zone,
         confidence=0.1,
         preliminary=True,
         rows_count=1,
@@ -112,6 +118,7 @@ async def test_relative_status_button_uses_relative_estimate(tmp_path, monkeypat
 
     assert "Режим расчета: с учетом приоритетов" not in reply
     assert calls[0]["kwargs"]["relative"] is True
+    assert calls[0]["kwargs"]["search_all_full_time"] is True
 
 
 async def test_debug_command_toggles_detailed_status(tmp_path, monkeypatch) -> None:
@@ -160,11 +167,30 @@ async def test_onboarding_with_entrant_code_does_not_ask_priorities(tmp_path) ->
         assert saved.pending_action is None
 
 
-async def test_onboarding_with_score_requires_program_priorities(tmp_path) -> None:
+async def test_onboarding_with_score_uses_all_programs_by_default(tmp_path) -> None:
     settings = _settings(tmp_path)
 
     await handle_command(CommandContext(user_id="tg:123", text="/setup", settings=settings))
     score_reply = await handle_command(CommandContext(user_id="tg:123", text="195", settings=settings))
+
+    assert "Профиль сохранен" in score_reply
+    assert "все очные направления РГРТУ" in score_reply
+    session_factory = build_session_factory(settings.database_url)
+    with session_factory() as session:
+        saved = session.scalar(select(UserSettings).where(UserSettings.max_user_id == "tg:123"))
+        assert saved is not None
+        assert saved.search_profile == "score"
+        assert saved.exam_score == 195
+        assert saved.program_priorities_json is None
+        assert saved.pending_action is None
+
+
+async def test_my_programs_button_saves_manual_score_programs(tmp_path) -> None:
+    settings = _settings(tmp_path)
+
+    prompt = await handle_command(
+        CommandContext(user_id="tg:123", text=MY_PROGRAMS_BUTTON_TEXT, settings=settings)
+    )
     complete = await handle_command(
         CommandContext(
             user_id="tg:123",
@@ -173,19 +199,38 @@ async def test_onboarding_with_score_requires_program_priorities(tmp_path) -> No
         )
     )
 
-    assert "Так как кода заявки нет" in score_reply
+    assert "Режим направлений: мои направления" in prompt
     assert "Профиль сохранен" in complete
-    assert "01.03.02" in complete
-    assert "09.03.03" in complete
     session_factory = build_session_factory(settings.database_url)
     with session_factory() as session:
         saved = session.scalar(select(UserSettings).where(UserSettings.max_user_id == "tg:123"))
         assert saved is not None
         assert saved.search_profile == "score"
-        assert saved.exam_score == 195
         assert saved.program_priorities_json is not None
         assert '"code": "01.03.02"' in saved.program_priorities_json
         assert saved.pending_action is None
+
+
+async def test_all_programs_button_clears_manual_score_programs(tmp_path) -> None:
+    settings = _settings(tmp_path)
+
+    await handle_command(
+        CommandContext(user_id="tg:123", text=MY_PROGRAMS_BUTTON_TEXT, settings=settings)
+    )
+    await handle_command(
+        CommandContext(user_id="tg:123", text="09.03.03;2\n01.03.02;1", settings=settings)
+    )
+    reply = await handle_command(
+        CommandContext(user_id="tg:123", text=ALL_PROGRAMS_BUTTON_TEXT, settings=settings)
+    )
+
+    assert "все очные направления РГРТУ" in reply
+    session_factory = build_session_factory(settings.database_url)
+    with session_factory() as session:
+        saved = session.scalar(select(UserSettings).where(UserSettings.max_user_id == "tg:123"))
+        assert saved is not None
+        assert saved.search_profile == "score"
+        assert saved.program_priorities_json is None
 
 
 async def test_first_code_status_discovers_and_saves_program_profile(tmp_path, monkeypatch) -> None:
@@ -251,3 +296,41 @@ def test_program_profile_applies_only_to_score_profile() -> None:
     assert [estimate.program_code for estimate in score_result] == ["01.03.02", "09.03.03"]
     assert [estimate.target_priority for estimate in score_result] == [1, 2]
     assert [estimate.program_code for estimate in code_result] == ["01.03.02", "09.03.03"]
+
+
+async def test_score_status_without_manual_programs_loads_all_and_limits_output(tmp_path, monkeypatch) -> None:
+    settings = _settings(tmp_path)
+    calls: list[dict] = []
+
+    async def fake_estimate_from_live(*args, **kwargs) -> list[AdmissionEstimate]:
+        calls.append({"args": args, "kwargs": kwargs})
+        return [
+            _estimate(
+                f"{index:02d}.03.02",
+                raw_position=(index, index),
+                zone=AdmissionZone.PASSING if index <= 2 else AdmissionZone.NON_PASSING,
+            )
+            for index in range(1, 21)
+        ]
+
+    monkeypatch.setattr(commands, "estimate_from_live", fake_estimate_from_live)
+
+    await handle_command(CommandContext(user_id="tg:123", text="/score 195", settings=settings))
+    reply = await handle_command(
+        CommandContext(user_id="tg:123", text=RELATIVE_STATUS_BUTTON_TEXT, settings=settings)
+    )
+
+    assert calls[0]["kwargs"]["search_all_full_time"] is True
+    assert "Показано 15 из 20 направлений" in reply
+
+
+async def test_profile_buttons_are_available(tmp_path) -> None:
+    settings = _settings(tmp_path)
+
+    setup = await handle_command(CommandContext(user_id="tg:123", text=SETUP_BUTTON_TEXT, settings=settings))
+    settings_reply = await handle_command(
+        CommandContext(user_id="tg:123", text=SETTINGS_BUTTON_TEXT, settings=settings)
+    )
+
+    assert "Настроим профиль" in setup
+    assert "Текущие настройки" in settings_reply

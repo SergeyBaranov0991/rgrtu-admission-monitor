@@ -1,4 +1,7 @@
 .env
+.env.tg
+.env.local
+.env.*.local
 .venv/
 __pycache__/
 .pytest_cache/
@@ -8,4 +11,5 @@ data/
 output/
 dist/
 build/
-
+docs/local/
+Caddyfile.local

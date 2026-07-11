@@ -15,7 +15,6 @@ from typing import Any
 OWNER = "SergeyBaranov0991"
 REPO = "rgrtu-admission-monitor"
 REPO_FULL_NAME = f"{OWNER}/{REPO}"
-SSH_KEY_PATH = Path(r"C:\Users\baranov_s\.ssh\rgrtu_new_server_ed25519")
 
 
 def main() -> None:
@@ -110,12 +109,13 @@ def configure_actions_secrets(token: str) -> None:
     except urllib.error.HTTPError as exc:
         if exc.code == 403:
             print("Skipping Actions secrets: token has no repository secrets permission")
-            print("Configure DEPLOY_SSH_KEY manually")
+            print("Configure deploy secrets manually")
             return
         raise
-    secrets = {
-        "DEPLOY_SSH_KEY": SSH_KEY_PATH.read_text(encoding="utf-8"),
-    }
+    secrets = deploy_secrets_from_env()
+    if not secrets:
+        print("No deploy secret environment variables found; skipping Actions secrets")
+        return
     for name, value in secrets.items():
         encrypted = encrypt_secret(public_key["key"], value)
         request_json(
@@ -125,6 +125,18 @@ def configure_actions_secrets(token: str) -> None:
             {"encrypted_value": encrypted, "key_id": public_key["key_id"]},
         )
         print(f"Secret configured: {name}")
+
+
+def deploy_secrets_from_env() -> dict[str, str]:
+    secrets = {}
+    ssh_key_path = os.environ.get("DEPLOY_SSH_KEY_PATH", "").strip()
+    if ssh_key_path:
+        secrets["DEPLOY_SSH_KEY"] = Path(ssh_key_path).read_text(encoding="utf-8")
+    for name in ("DEPLOY_HOST", "DEPLOY_USER", "DEPLOY_PATH", "DEPLOY_MAX_PATH"):
+        value = os.environ.get(name, "").strip()
+        if value:
+            secrets[name] = value
+    return secrets
 
 
 def encrypt_secret(public_key_b64: str, value: str) -> str:

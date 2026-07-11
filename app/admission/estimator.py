@@ -141,6 +141,7 @@ def estimate_competition_by_code(
     fallback_score: int,
     today: date | None = None,
     use_row_position: bool = True,
+    use_filtered_order_position: bool = False,
 ) -> AdmissionEstimate:
     rows = [row for row in competition.rows if row.anonymous_applicant_id == entrant_code and row.is_active]
     if not rows:
@@ -163,11 +164,13 @@ def estimate_competition_by_code(
     row = min(rows, key=lambda item: item.position or 10**9)
     target_score = row.total_score if row.total_score is not None else fallback_score
     estimate = estimate_competition(competition, target_score, today=today)
-    position = (
-        (row.position, row.position)
-        if use_row_position and row.position is not None
-        else estimate.raw_position
-    )
+    if use_row_position and row.position is not None:
+        position = (row.position, row.position)
+    elif use_filtered_order_position:
+        order_position = _filtered_order_position(competition, entrant_code)
+        position = (order_position, order_position) if order_position is not None else estimate.raw_position
+    else:
+        position = estimate.raw_position
     zone = estimate.zone
     if position is not None and estimate.scored_rows_count is not None:
         if estimate.scored_rows_count >= estimate.places:
@@ -194,6 +197,17 @@ def _as_tuple(interval: RankInterval | None) -> tuple[int, int] | None:
 
 def _rank_interval(value: tuple[int, int]) -> RankInterval:
     return RankInterval(best=value[0], worst=value[1])
+
+
+def _filtered_order_position(competition: CompetitionList, entrant_code: str) -> int | None:
+    position = 0
+    for row in competition.rows:
+        if not row.is_active:
+            continue
+        position += 1
+        if row.anonymous_applicant_id == entrant_code:
+            return position
+    return None
 
 
 def _zone(interval: RankInterval | None, places: int) -> AdmissionZone:

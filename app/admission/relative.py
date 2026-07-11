@@ -33,19 +33,46 @@ class RelativeSelection:
     exclusions: dict[tuple[int, str], RelativeExclusion]
 
 
+@dataclass(frozen=True)
+class _GroupSelection:
+    rows_by_index: dict[int, list[ApplicantRow]]
+    exclusions: dict[tuple[int, str], RelativeExclusion]
+
+
 def build_relative_selection(competitions: list[CompetitionList]) -> RelativeSelection:
-    participations_by_applicant = _participations_by_applicant(competitions)
-    active_ids = _initial_active_ids(competitions)
+    rows_by_index = {index: competition.rows for index, competition in enumerate(competitions)}
     exclusions: dict[tuple[int, str], RelativeExclusion] = {}
 
-    for _ in range(_max_iterations(competitions)):
+    for indexes in _selection_groups(competitions):
+        group_selection = _build_relative_selection_group(competitions, indexes)
+        rows_by_index.update(group_selection.rows_by_index)
+        exclusions.update(group_selection.exclusions)
+
+    filtered = [
+        competition.model_copy(update={"rows": rows_by_index[index]})
+        for index, competition in enumerate(competitions)
+    ]
+    return RelativeSelection(competitions=filtered, exclusions=exclusions)
+
+
+def _build_relative_selection_group(
+    competitions: list[CompetitionList],
+    indexes: list[int],
+) -> _GroupSelection:
+    participations_by_applicant = _participations_by_applicant(competitions, indexes)
+    active_ids = _initial_active_ids(competitions, indexes)
+    exclusions: dict[tuple[int, str], RelativeExclusion] = {}
+
+    for _ in range(_max_iterations(competitions, indexes)):
         admitted = _admitted_participations(
             competitions,
+            indexes,
             active_ids=active_ids,
             participations_by_applicant=participations_by_applicant,
         )
         next_active_ids, next_exclusions = _next_active_ids(
             competitions,
+            indexes,
             admitted_by_applicant=admitted,
         )
         if next_active_ids == active_ids:
@@ -54,19 +81,15 @@ def build_relative_selection(competitions: list[CompetitionList]) -> RelativeSel
         active_ids = next_active_ids
         exclusions = next_exclusions
 
-    filtered = [
-        competition.model_copy(
-            update={
-                "rows": [
-                    row
-                    for row in competition.rows
-                    if _row_key(row) in active_ids.get(index, set())
-                ]
-            }
-        )
-        for index, competition in enumerate(competitions)
-    ]
-    return RelativeSelection(competitions=filtered, exclusions=exclusions)
+    rows_by_index = {
+        index: [
+            row
+            for row in competitions[index].rows
+            if _row_key(row) in active_ids.get(index, set())
+        ]
+        for index in indexes
+    }
+    return _GroupSelection(rows_by_index=rows_by_index, exclusions=exclusions)
 
 
 def find_row_by_applicant_id(competition: CompetitionList, applicant_id: str) -> ApplicantRow | None:
@@ -86,9 +109,11 @@ def relative_rows_count(competition: CompetitionList) -> int:
 
 def _participations_by_applicant(
     competitions: list[CompetitionList],
+    indexes: list[int],
 ) -> dict[str, list[Participation]]:
     participations: dict[str, list[Participation]] = {}
-    for index, competition in enumerate(competitions):
+    for index in indexes:
+        competition = competitions[index]
         ref = _competition_ref(index, competition)
         for row in competition.rows:
             if not row.is_active or not row.anonymous_applicant_id:
@@ -99,25 +124,27 @@ def _participations_by_applicant(
     return participations
 
 
-def _initial_active_ids(competitions: list[CompetitionList]) -> dict[int, set[str]]:
+def _initial_active_ids(competitions: list[CompetitionList], indexes: list[int]) -> dict[int, set[str]]:
     return {
         index: {
             key
-            for row in competition.rows
+            for row in competitions[index].rows
             if row.is_active and (key := _row_key(row)) is not None
         }
-        for index, competition in enumerate(competitions)
+        for index in indexes
     }
 
 
 def _admitted_participations(
     competitions: list[CompetitionList],
+    indexes: list[int],
     *,
     active_ids: dict[int, set[str]],
     participations_by_applicant: dict[str, list[Participation]],
 ) -> dict[str, list[Participation]]:
     admitted: dict[str, list[Participation]] = {}
-    for index, competition in enumerate(competitions):
+    for index in indexes:
+        competition = competitions[index]
         rows = [
             row
             for row in competition.rows
@@ -145,12 +172,14 @@ def _admitted_participations(
 
 def _next_active_ids(
     competitions: list[CompetitionList],
+    indexes: list[int],
     *,
     admitted_by_applicant: dict[str, list[Participation]],
 ) -> tuple[dict[int, set[str]], dict[tuple[int, str], RelativeExclusion]]:
     active_ids: dict[int, set[str]] = {}
     exclusions: dict[tuple[int, str], RelativeExclusion] = {}
-    for index, competition in enumerate(competitions):
+    for index in indexes:
+        competition = competitions[index]
         current_ref = _competition_ref(index, competition)
         selected: set[str] = set()
         for row in competition.rows:
@@ -220,5 +249,12 @@ def _row_key(row: ApplicantRow) -> str | None:
     return row.anonymous_applicant_id
 
 
-def _max_iterations(competitions: list[CompetitionList]) -> int:
-    return max(1, sum(len(competition.rows) for competition in competitions) + 1)
+def _selection_groups(competitions: list[CompetitionList]) -> list[list[int]]:
+    groups: dict[str, list[int]] = {}
+    for index, competition in enumerate(competitions):
+        groups.setdefault(competition.metadata.funding_type.value, []).append(index)
+    return list(groups.values())
+
+
+def _max_iterations(competitions: list[CompetitionList], indexes: list[int]) -> int:
+    return max(1, sum(len(competitions[index].rows) for index in indexes) + 1)
