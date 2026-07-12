@@ -40,10 +40,15 @@ the list down to applicants with submitted enrollment consent. Consent/VPP/OVP f
 when they are present in a concrete source list; if they are absent, debug reports "no data" rather
 than treating the value as zero consents.
 
-Status replies are compact by default. Send `/debug` to toggle detailed output for the current chat;
-send `/debug on` or `/debug off` to set it explicitly. Detailed output includes source status,
-scored-row counts, calculation notes, priority-filter details, consent/VPP/OVP data availability,
-and forecast fields.
+Status replies are compact by default and include a separate `Историка` line when prior-year data is
+available. Send `/debug` to toggle detailed output for the current chat; send `/debug on` or
+`/debug off` to set it explicitly. Detailed output includes source status, scored-row counts,
+calculation notes, priority-filter details, consent/VPP/OVP data availability, and current plus
+historical forecast fields.
+
+Historical references are static constants in `app.admission.historical`: budget/general competition
+uses the official RGRTU prior-year minimum and average scores page, while paid directions use the
+official 2025 commercial enrollment orders.
 
 Changes pushed to `main` run lint/tests and recreate the TG container through the deploy workflow.
 

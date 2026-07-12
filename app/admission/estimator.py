@@ -5,9 +5,10 @@ from datetime import date
 
 from pydantic import BaseModel
 
+from app.admission.historical import historical_forecast
 from app.admission.ranking import RankInterval, effective_rows, passing_score, score_rank_interval
 from app.admission.zones import AdmissionZone
-from app.rgrtu.base import ApplicantRow, CompetitionList, SourceStatus
+from app.rgrtu.base import ApplicantRow, CompetitionList, CompetitionMetadata, SourceStatus
 
 
 OFFICIAL_LIST_DATE = date(2026, 7, 27)
@@ -33,6 +34,10 @@ class AdmissionEstimate(BaseModel):
     forecast_passing_score: tuple[int, int] | None
     published_score_floor: int | None = None
     draft_forecast_score: tuple[int, int] | None = None
+    historical_passing_score: tuple[int, int] | None = None
+    historical_average_score: tuple[int, int] | None = None
+    historical_years: tuple[int, ...] = ()
+    historical_source: str | None = None
     zone: AdmissionZone
     confidence: float
     preliminary: bool
@@ -74,6 +79,7 @@ def estimate_competition(
 
     if competition.source_status != SourceStatus.OK:
         rows_count = _applications_count(competition)
+        historical = _historical_update(metadata)
         return AdmissionEstimate(
             program_code=metadata.program_code,
             program_name=metadata.program_name,
@@ -87,6 +93,7 @@ def estimate_competition(
             forecast_passing_score=None,
             published_score_floor=None,
             draft_forecast_score=None,
+            **historical,
             zone=AdmissionZone.SOURCE_UNAVAILABLE,
             confidence=0.0,
             preliminary=_is_preliminary(today),
@@ -112,6 +119,7 @@ def estimate_competition(
         confidence=confidence,
         preliminary=preliminary,
     )
+    historical = _historical_update(metadata)
     position_for_zone = raw_interval if passing.has_complete_score_rows else None
     zone = _zone(position_for_zone, places)
 
@@ -128,6 +136,7 @@ def estimate_competition(
         forecast_passing_score=passing.forecast_score,
         published_score_floor=passing.published_floor,
         draft_forecast_score=passing.draft_forecast_score,
+        **historical,
         zone=zone,
         confidence=confidence,
         preliminary=preliminary,
@@ -309,6 +318,23 @@ def _scored_rows_count(competition: CompetitionList) -> int:
         for row in competition.rows
         if row.total_score is not None and row.is_active
     )
+
+
+def _historical_update(metadata: CompetitionMetadata) -> dict[str, object]:
+    forecast = historical_forecast(metadata.program_code, metadata.funding_type.value)
+    if forecast is None:
+        return {
+            "historical_passing_score": None,
+            "historical_average_score": None,
+            "historical_years": (),
+            "historical_source": None,
+        }
+    return {
+        "historical_passing_score": forecast.passing_score_range,
+        "historical_average_score": forecast.average_score_range,
+        "historical_years": forecast.years,
+        "historical_source": forecast.source,
+    }
 
 
 def decision_data_counts(competition: CompetitionList) -> dict[str, int]:

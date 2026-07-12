@@ -21,6 +21,8 @@ Current implementation is the first MVP slice:
 - admission rank interval and zone estimation;
 - relative admission estimate that filters only applicants already passing by a higher priority;
 - live RGRTU public-list check through the official competition-list page payload;
+- separate historical passing-score reference from official RGRTU prior-year data and 2025 paid
+  enrollment orders;
 - RGRTU Livewire subject discovery;
 - Docker Compose and operational docs.
 
@@ -60,6 +62,7 @@ Actions.
 - `app.bot.profile` parses and stores score-profile specialty priorities.
 - `app.bot.messages` renders human-readable MAX/Telegram responses.
 - `app.admission.estimator` computes rank, passing-score, confidence, and forecast fields.
+- `app.admission.historical` stores official prior-year budget and paid passing-score references.
 - `app.admission.relative` builds priority-aware competition lists for relative status.
 - `app.rgrtu.livewire_adapter` fetches current public RGRTU competition-list payloads.
 
@@ -95,10 +98,12 @@ Text commands are also supported:
 /all_programs
 ```
 
-Status responses are compact by default. `/debug` toggles detailed responses for the current chat;
-when enabled, status output includes source status, scored-row counts, calculation notes,
-priority-filter details, consent/VPP/OVP data availability, and forecast fields. The CLI uses the
-same split: add `--debug` to print the detailed form.
+Status responses are compact by default and include a separate `Историка` line with prior-year
+passing-score and average-score references when data is available. `/debug` toggles detailed
+responses for the current chat; when enabled, status output includes source status, scored-row
+counts, calculation notes, priority-filter details, consent/VPP/OVP data availability, and current
+plus historical forecast fields. The CLI uses the same split: add `--debug` to print the detailed
+form.
 
 `/setup` configures the current chat. The first answer is either the RGRTU service entrant code or a
 score. If the answer is a long numeric code, the bot stores code search; the first status request
@@ -153,6 +158,15 @@ The bot reads current public data from:
 - Livewire component embedded in that page: `competition-lists-common`
 - direct competition pages selected from `competitions[].id`, for example:
   <https://postupai.rsreu.ru/guest/competition-lists/20/1863247416534381847>
+
+Historical references are static constants sourced from official RGRTU pages:
+
+- budget/general competition minimum and average scores for prior years:
+  <https://rsreu.ru/abitur/bachelor/srednie-i-minimalnye-prokhodnye-bally>
+- paid 2025 enrollment order №932-д:
+  <https://rsreu.ru/component/docman/doc_download/20635-prikaz-932-d-ot-28-08-2025-kommertsiya-ochnoe>
+- paid 2025 foreign-student enrollment order №933-д:
+  <https://rsreu.ru/component/docman/doc_download/20634-prikaz-933-d-ot-28-08-2025-kommertsiya-ochnoe>
 
 `RGRTU_CAMPAIGN_ID` controls the campaign id. The current value `20` is the RGRTU
 `Бакалавриат и специалитет 2026/2027` campaign. The overview payload contains the official

@@ -62,6 +62,29 @@ def test_estimator_uses_raw_position_and_passing_score() -> None:
     assert estimate.zone == AdmissionZone.BORDERLINE
 
 
+def test_estimator_adds_historical_forecast() -> None:
+    competition = CompetitionList(
+        metadata=CompetitionMetadata(
+            program_code="09.03.03",
+            program_name="Прикладная информатика",
+            funding_type=Funding.PAID,
+            published_places=2,
+            applications_count=2,
+        ),
+        rows=[
+            ApplicantRow(total_score=190),
+            ApplicantRow(total_score=195),
+        ],
+    )
+
+    estimate = estimate_competition(competition, 195, today=date(2026, 7, 3))
+
+    assert estimate.historical_passing_score == (135, 135)
+    assert estimate.historical_average_score == (145, 145)
+    assert estimate.historical_years == (2025,)
+    assert estimate.historical_source == "official_paid_orders"
+
+
 def test_estimator_marks_incomplete_scores_as_insufficient_data() -> None:
     competition = CompetitionList(
         metadata=CompetitionMetadata(

@@ -133,6 +133,58 @@ def test_render_estimate_block_compact_hides_decision_data_note() -> None:
     assert not any("ВПП" in line for line in block)
 
 
+def test_render_estimate_block_compact_shows_historical_forecast() -> None:
+    estimate = AdmissionEstimate(
+        program_code="09.03.03",
+        program_name="Прикладная информатика",
+        funding_type="paid",
+        places=18,
+        target_score=195,
+        raw_position=(1, 1),
+        effective_position=(1, 1),
+        current_passing_score=None,
+        forecast_passing_score=None,
+        historical_passing_score=(135, 135),
+        historical_average_score=(145, 145),
+        historical_years=(2025,),
+        zone=AdmissionZone.INSUFFICIENT_DATA,
+        confidence=0.2,
+        preliminary=True,
+        rows_count=32,
+        scored_rows_count=0,
+    )
+
+    block = render_estimate_block(estimate)
+
+    assert "Историка: проходной 135; средний 145; годы 2025; балл выше на 60" in block
+
+
+def test_render_estimate_block_debug_shows_historical_forecast() -> None:
+    estimate = AdmissionEstimate(
+        program_code="09.03.02",
+        program_name="Информационные системы и технологии",
+        funding_type="budget",
+        places=19,
+        target_score=195,
+        raw_position=(8, 8),
+        effective_position=(8, 8),
+        current_passing_score=210,
+        forecast_passing_score=(203, 217),
+        historical_passing_score=(207, 210),
+        historical_average_score=(214, 228),
+        historical_years=(2024, 2025),
+        zone=AdmissionZone.PASSING,
+        confidence=0.6,
+        preliminary=True,
+        rows_count=170,
+        scored_rows_count=30,
+    )
+
+    block = render_estimate_block(estimate, debug=True)
+
+    assert "Исторический ориентир: проходной 207-210; средний 214-228; годы 2024-2025; балл ниже диапазона на 12" in block
+
+
 def test_render_estimate_block_shows_category_and_code_status() -> None:
     estimate = AdmissionEstimate(
         program_code="01.03.02",

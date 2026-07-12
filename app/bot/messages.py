@@ -62,6 +62,7 @@ def render_estimate_block(estimate: AdmissionEstimate, *, debug: bool = False) -
     if estimate.relative_excluded_by:
         position_text = "не учитывается"
     forecast = _forecast_label(estimate)
+    historical = _historical_label(estimate)
     confidence = _confidence_label(estimate.confidence)
     preliminary = " (предварительно)" if estimate.preliminary else ""
     applications_count = _applications_count_label(estimate)
@@ -104,6 +105,7 @@ def render_estimate_block(estimate: AdmissionEstimate, *, debug: bool = False) -
     lines.extend(
         [
             f"Прогноз проходного: {forecast}{preliminary}",
+            f"Исторический ориентир: {historical}",
             f"Статус: {ZONE_LABELS[estimate.zone]}",
             f"Достоверность: {confidence}",
         ]
@@ -135,6 +137,9 @@ def _render_compact_estimate_block(estimate: AdmissionEstimate) -> list[str]:
             f"Проходной сейчас: {_value_or_no_data(estimate.current_passing_score)}",
         ]
     )
+    historical = _historical_label(estimate)
+    if historical != "нет данных":
+        lines.append(f"Историка: {historical}")
     if estimate.relative_excluded_by:
         lines.append(f"Причина: проходит выше по приоритету в {estimate.relative_excluded_by}")
     lines.extend(
@@ -166,8 +171,8 @@ def render_help() -> str:
             "«Настроить профиль» запускает настройку текущего чата. Если указан код заявки, первый статус найдет до 5 направлений по всем очным спискам РГРТУ и сохранит их в профиль.",
             "Если указан балл, бот будет проверять все очные направления. Кнопка «Мои направления» сужает поиск до списка в формате 01.03.02;1, а «Все направления» возвращает поиск по всему вузу.",
             "",
-            "По умолчанию статус компактный: места, заявления, позиция, проходной, статус и достоверность.",
-            "/debug включает или выключает подробный режим. В подробном режиме показываются источник, строки с баллами, расчет, фильтрация, наличие данных согласий/ВПП/ОВП и прогноз.",
+            "По умолчанию статус компактный: места, заявления, позиция, текущий и исторический проходной, статус и достоверность.",
+            "/debug включает или выключает подробный режим. В подробном режиме показываются источник, строки с баллами, расчет, фильтрация, наличие данных согласий/ВПП/ОВП, текущий и исторический прогноз.",
             "",
             "Относительный статус исключает заявку из направления, если тот же код уверенно проходит на более высоком приоритете в выбранном режиме категорий. Спорные равные баллы на границе мест остаются в расчете.",
             "Согласия/ВПП/ОВП не подменяются нулями: если этих полей нет в конкретном списке, бот считает это отсутствием данных и не использует их в расчете.",
@@ -220,6 +225,39 @@ def _forecast_label(estimate: AdmissionEstimate) -> str:
     if estimate.draft_forecast_score:
         return f"черновой {_interval(estimate.draft_forecast_score)}"
     return "нет данных"
+
+
+def _historical_label(estimate: AdmissionEstimate) -> str:
+    if estimate.historical_passing_score is None:
+        return "нет данных"
+    parts = [f"проходной {_interval(estimate.historical_passing_score)}"]
+    if estimate.historical_average_score is not None:
+        parts.append(f"средний {_interval(estimate.historical_average_score)}")
+    if estimate.historical_years:
+        parts.append(f"годы {_years_label(estimate.historical_years)}")
+    parts.append(_historical_relation(estimate.target_score, estimate.historical_passing_score))
+    return "; ".join(parts)
+
+
+def _years_label(years: tuple[int, ...]) -> str:
+    if len(years) == 1:
+        return str(years[0])
+    return f"{min(years)}-{max(years)}"
+
+
+def _historical_relation(target_score: int, historical_range: tuple[int, int]) -> str:
+    low, high = historical_range
+    if low == high:
+        if target_score == low:
+            return "балл на уровне"
+        if target_score > high:
+            return f"балл выше на {target_score - high}"
+        return f"балл ниже на {low - target_score}"
+    if target_score < low:
+        return f"балл ниже диапазона на {low - target_score}"
+    if target_score > high:
+        return f"балл выше диапазона на {target_score - high}"
+    return "балл в диапазоне"
 
 
 def _profile_label(*, score: int, entrant_code: str | None) -> str:
