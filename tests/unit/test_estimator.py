@@ -92,6 +92,54 @@ def test_estimator_marks_incomplete_scores_as_insufficient_data() -> None:
     assert estimate.confidence < 0.5
 
 
+def test_estimator_counts_decision_data_only_when_source_fields_exist() -> None:
+    competition = CompetitionList(
+        metadata=CompetitionMetadata(
+            program_code="09.03.03",
+            program_name="Прикладная информатика",
+            funding_type=Funding.BUDGET,
+            published_places=2,
+            applications_count=3,
+        ),
+        rows=[
+            ApplicantRow(total_score=240, priority=1, consent_status=True),
+            ApplicantRow(total_score=230, priority=2, original_status=False),
+            ApplicantRow(total_score=195, priority=3, higher_priority_status="ВПП"),
+        ],
+    )
+
+    estimate = estimate_competition(competition, 195, today=date(2026, 7, 3))
+
+    assert estimate.decision_rows_count == 3
+    assert estimate.consent_rows_count == 1
+    assert estimate.original_rows_count == 1
+    assert estimate.higher_priority_status_rows_count == 1
+
+
+def test_estimator_does_not_treat_priority_as_consent_or_vpp_data() -> None:
+    competition = CompetitionList(
+        metadata=CompetitionMetadata(
+            program_code="09.03.03",
+            program_name="Прикладная информатика",
+            funding_type=Funding.BUDGET,
+            published_places=2,
+            applications_count=3,
+        ),
+        rows=[
+            ApplicantRow(total_score=240, priority=1),
+            ApplicantRow(total_score=230, priority=2),
+            ApplicantRow(total_score=195, priority=3),
+        ],
+    )
+
+    estimate = estimate_competition(competition, 195, today=date(2026, 7, 3))
+
+    assert estimate.decision_rows_count == 0
+    assert estimate.consent_rows_count == 0
+    assert estimate.original_rows_count == 0
+    assert estimate.higher_priority_status_rows_count == 0
+
+
 def test_estimator_by_code_uses_exact_row_position() -> None:
     competition = CompetitionList(
         metadata=CompetitionMetadata(

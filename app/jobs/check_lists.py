@@ -5,7 +5,12 @@ import logging
 
 import httpx
 
-from app.admission.estimator import AdmissionEstimate, estimate_competition, estimate_competition_by_code
+from app.admission.estimator import (
+    AdmissionEstimate,
+    decision_data_counts,
+    estimate_competition,
+    estimate_competition_by_code,
+)
 from app.admission.relative import (
     RelativeSelection,
     build_relative_selection,
@@ -156,10 +161,21 @@ def estimate_relative_competitions(
                         if filtered.source_status == SourceStatus.OK
                         else None
                     ),
+                    **_decision_data_update(original),
                 }
             )
         )
     return estimates
+
+
+def _decision_data_update(competition: CompetitionList) -> dict[str, int]:
+    counts = decision_data_counts(competition)
+    return {
+        "decision_rows_count": counts["decision"],
+        "consent_rows_count": counts["consent"],
+        "original_rows_count": counts["original"],
+        "higher_priority_status_rows_count": counts["higher_priority_status"],
+    }
 
 
 def _target_relative_competition(

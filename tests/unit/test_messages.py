@@ -55,6 +55,84 @@ def test_render_estimate_block_uses_raw_position_and_shows_scored_count() -> Non
     assert "Оценочная позиция: 2" not in block
 
 
+def test_render_estimate_block_debug_shows_absent_decision_data() -> None:
+    estimate = AdmissionEstimate(
+        program_code="09.03.03",
+        program_name="Прикладная информатика",
+        funding_type="budget",
+        places=20,
+        target_score=195,
+        raw_position=(5, 5),
+        effective_position=(5, 5),
+        current_passing_score=193,
+        forecast_passing_score=(186, 200),
+        zone=AdmissionZone.PASSING,
+        confidence=0.6,
+        preliminary=True,
+        rows_count=21,
+        scored_rows_count=21,
+        decision_rows_count=0,
+        consent_rows_count=0,
+        original_rows_count=0,
+        higher_priority_status_rows_count=0,
+    )
+
+    block = render_estimate_block(estimate, debug=True)
+
+    assert "Согласия/ВПП/ОВП: нет данных в этом списке." in block
+
+
+def test_render_estimate_block_debug_shows_available_decision_data() -> None:
+    estimate = AdmissionEstimate(
+        program_code="09.03.03",
+        program_name="Прикладная информатика",
+        funding_type="budget",
+        places=20,
+        target_score=195,
+        raw_position=(5, 5),
+        effective_position=(5, 5),
+        current_passing_score=193,
+        forecast_passing_score=(186, 200),
+        zone=AdmissionZone.PASSING,
+        confidence=0.6,
+        preliminary=True,
+        rows_count=21,
+        scored_rows_count=21,
+        decision_rows_count=7,
+        consent_rows_count=2,
+        original_rows_count=3,
+        higher_priority_status_rows_count=4,
+    )
+
+    block = render_estimate_block(estimate, debug=True)
+
+    assert "Согласия/ВПП/ОВП: строк с данными: 7; согласия: 2; оригиналы: 3; ВПП/ОВП: 4." in block
+
+
+def test_render_estimate_block_compact_hides_decision_data_note() -> None:
+    estimate = AdmissionEstimate(
+        program_code="09.03.03",
+        program_name="Прикладная информатика",
+        funding_type="budget",
+        places=20,
+        target_score=195,
+        raw_position=(5, 5),
+        effective_position=(5, 5),
+        current_passing_score=193,
+        forecast_passing_score=(186, 200),
+        zone=AdmissionZone.PASSING,
+        confidence=0.6,
+        preliminary=True,
+        rows_count=21,
+        scored_rows_count=21,
+        decision_rows_count=0,
+    )
+
+    block = render_estimate_block(estimate)
+
+    assert not any("ВПП" in line for line in block)
+
+
 def test_render_estimate_block_shows_category_and_code_status() -> None:
     estimate = AdmissionEstimate(
         program_code="01.03.02",

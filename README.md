@@ -97,8 +97,8 @@ Text commands are also supported:
 
 Status responses are compact by default. `/debug` toggles detailed responses for the current chat;
 when enabled, status output includes source status, scored-row counts, calculation notes,
-priority-filter details, and forecast fields. The CLI uses the same split: add `--debug` to print
-the detailed form.
+priority-filter details, consent/VPP/OVP data availability, and forecast fields. The CLI uses the
+same split: add `--debug` to print the detailed form.
 
 `/setup` configures the current chat. The first answer is either the RGRTU service entrant code or a
 score. If the answer is a long numeric code, the bot stores code search; the first status request
@@ -166,7 +166,8 @@ their priority in the current list is lower than the target applicant's priority
 boundary are kept in the lower-priority list unless the whole equal-score interval fits into the
 available places. Budget and paid competitions are filtered separately because they use separate
 priority sequences. This mode is priority-aware but does not filter the list down to applicants with
-submitted enrollment consent; a consent/VPP-style mode should be implemented as a separate mode.
+submitted enrollment consent. Consent/VPP/OVP fields are treated as unavailable unless they are
+present in a concrete source list; absence of those fields is not interpreted as zero consents.
 
 For a code-based relative profile, the bot loads all full-time RGRTU competitions first, builds the
 higher-priority filter from that full universe, and only then filters the chat response back to the

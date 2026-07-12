@@ -100,6 +100,7 @@ def render_estimate_block(estimate: AdmissionEstimate, *, debug: bool = False) -
     relative_note = _relative_note(estimate)
     if relative_note:
         lines.append(relative_note)
+    lines.append(_decision_data_note(estimate))
     lines.extend(
         [
             f"Прогноз проходного: {forecast}{preliminary}",
@@ -166,9 +167,10 @@ def render_help() -> str:
             "Если указан балл, бот будет проверять все очные направления. Кнопка «Мои направления» сужает поиск до списка в формате 01.03.02;1, а «Все направления» возвращает поиск по всему вузу.",
             "",
             "По умолчанию статус компактный: места, заявления, позиция, проходной, статус и достоверность.",
-            "/debug включает или выключает подробный режим. В подробном режиме показываются источник, строки с баллами, расчет, фильтрация и прогноз.",
+            "/debug включает или выключает подробный режим. В подробном режиме показываются источник, строки с баллами, расчет, фильтрация, наличие данных согласий/ВПП/ОВП и прогноз.",
             "",
             "Относительный статус исключает заявку из направления, если тот же код уверенно проходит на более высоком приоритете в выбранном режиме категорий. Спорные равные баллы на границе мест остаются в расчете.",
+            "Согласия/ВПП/ОВП не подменяются нулями: если этих полей нет в конкретном списке, бот считает это отсутствием данных и не использует их в расчете.",
             "Если опубликованных баллов меньше, чем мест, проходной может быть не рассчитан, а достоверность будет минимальной.",
             "",
             "Текстовая команда /status тоже работает.",
@@ -267,6 +269,23 @@ def _applications_count_label(estimate: AdmissionEstimate) -> str:
         )
         label = f"{label} ({scored_label}: {scored})"
     return label
+
+
+def _decision_data_note(estimate: AdmissionEstimate) -> str:
+    decision = estimate.decision_rows_count
+    if decision is None:
+        return "Согласия/ВПП/ОВП: нет данных в источнике."
+    if decision == 0:
+        return "Согласия/ВПП/ОВП: нет данных в этом списке."
+
+    parts = [f"строк с данными: {decision}"]
+    if estimate.consent_rows_count:
+        parts.append(f"согласия: {estimate.consent_rows_count}")
+    if estimate.original_rows_count:
+        parts.append(f"оригиналы: {estimate.original_rows_count}")
+    if estimate.higher_priority_status_rows_count:
+        parts.append(f"ВПП/ОВП: {estimate.higher_priority_status_rows_count}")
+    return "Согласия/ВПП/ОВП: " + "; ".join(parts) + "."
 
 
 def _target_code_label(estimate: AdmissionEstimate) -> str:

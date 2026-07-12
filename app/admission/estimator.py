@@ -7,7 +7,7 @@ from pydantic import BaseModel
 
 from app.admission.ranking import RankInterval, effective_rows, passing_score, score_rank_interval
 from app.admission.zones import AdmissionZone
-from app.rgrtu.base import CompetitionList, SourceStatus
+from app.rgrtu.base import ApplicantRow, CompetitionList, SourceStatus
 
 
 OFFICIAL_LIST_DATE = date(2026, 7, 27)
@@ -47,6 +47,10 @@ class AdmissionEstimate(BaseModel):
     ranking_mode: str = "raw"
     relative_rows_count: int | None = None
     relative_excluded_by: str | None = None
+    decision_rows_count: int | None = None
+    consent_rows_count: int | None = None
+    original_rows_count: int | None = None
+    higher_priority_status_rows_count: int | None = None
 
 
 @dataclass(frozen=True)
@@ -95,6 +99,7 @@ def estimate_competition(
 
     rows_count = _applications_count(competition)
     scored_rows_count = _scored_rows_count(competition)
+    decision_data = decision_data_counts(competition)
     raw_interval = score_rank_interval(competition.rows, target_score)
     effective = effective_rows(competition.rows)
     effective_interval = score_rank_interval(effective, target_score)
@@ -131,6 +136,10 @@ def estimate_competition(
         source_error=_source_error(competition),
         rows_count=rows_count,
         scored_rows_count=scored_rows_count,
+        decision_rows_count=decision_data["decision"],
+        consent_rows_count=decision_data["consent"],
+        original_rows_count=decision_data["original"],
+        higher_priority_status_rows_count=decision_data["higher_priority_status"],
     )
 
 
@@ -299,4 +308,22 @@ def _scored_rows_count(competition: CompetitionList) -> int:
         1
         for row in competition.rows
         if row.total_score is not None and row.is_active
+    )
+
+
+def decision_data_counts(competition: CompetitionList) -> dict[str, int]:
+    active_rows = [row for row in competition.rows if row.is_active]
+    return {
+        "decision": sum(1 for row in active_rows if _has_decision_data(row)),
+        "consent": sum(1 for row in active_rows if row.consent_status is not None),
+        "original": sum(1 for row in active_rows if row.original_status is not None),
+        "higher_priority_status": sum(1 for row in active_rows if row.higher_priority_status),
+    }
+
+
+def _has_decision_data(row: ApplicantRow) -> bool:
+    return (
+        row.consent_status is not None
+        or row.original_status is not None
+        or bool(row.higher_priority_status)
     )

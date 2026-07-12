@@ -36,11 +36,14 @@ full-time specialties.
 For a code-based relative status, the filter is built from all full-time RGRTU competitions before
 the reply is narrowed back to the saved chat profile. A lower-priority applicant remains in the
 current list unless that applicant passes by a higher priority elsewhere. This mode does not filter
-the list down to applicants with submitted enrollment consent.
+the list down to applicants with submitted enrollment consent. Consent/VPP/OVP fields are used only
+when they are present in a concrete source list; if they are absent, debug reports "no data" rather
+than treating the value as zero consents.
 
 Status replies are compact by default. Send `/debug` to toggle detailed output for the current chat;
 send `/debug on` or `/debug off` to set it explicitly. Detailed output includes source status,
-scored-row counts, calculation notes, priority-filter details, and forecast fields.
+scored-row counts, calculation notes, priority-filter details, consent/VPP/OVP data availability,
+and forecast fields.
 
 Changes pushed to `main` run lint/tests and recreate the TG container through the deploy workflow.
 
