@@ -86,37 +86,63 @@ def parse_competition_table_html(
     funding_type: Funding,
     places: int,
     source_url: str,
+    campaign_id: int | None = None,
+    competition_id: str | None = None,
+    admission_basis: str = "general",
+    applications_count: int | None = None,
+    withdrawn_count: int | None = None,
 ) -> CompetitionList:
     soup = BeautifulSoup(html, "lxml")
     rows: list[ApplicantRow] = []
 
     for tr in soup.select("table tr"):
-        cells = [cell.get_text(" ", strip=True) for cell in tr.find_all(["td", "th"])]
+        cells = [cell.get_text(" ", strip=True) for cell in tr.find_all(["td", "th"], recursive=False)]
         if len(cells) < 2:
             continue
-        position = _int_or_none(cells[0])
-        score_candidates = [
-            score
-            for score in (_int_or_none(cell) for cell in cells[1:])
-            if score is not None and 0 <= score <= 310
-        ]
-        total_score = max(score_candidates) if score_candidates else None
+        position = _first_int_or_none(cells[0])
+        applicant_id = _string_or_none(cells[1]) if len(cells) >= 3 else None
+        priority = _int_or_none(cells[3]) if len(cells) >= 4 else None
+        consent_status = _bool_or_none(cells[5]) if len(cells) >= 6 else None
+        application_status = _string_or_none(cells[6]) if len(cells) >= 7 else None
+        higher_priority_status = _dash_to_none(cells[7]) if len(cells) >= 8 else None
+        original_status = _bool_or_none(cells[8]) if len(cells) >= 9 else None
+        individual_achievements = _int_or_none(cells[9]) if len(cells) >= 10 else None
+        total_score = (
+            _int_or_none(cells[10])
+            if len(cells) >= 11
+            else _int_or_none(cells[2]) if len(cells) >= 3 else None
+        )
+        exam_score_sum = _int_or_none(cells[2]) if len(cells) >= 3 else total_score
         if position is None or total_score is None:
             continue
         rows.append(
             ApplicantRow(
                 position=position,
                 total_score=total_score,
-                anonymous_applicant_id=hashlib.sha256(" ".join(cells).encode()).hexdigest()[:16],
+                anonymous_applicant_id=applicant_id
+                if applicant_id and applicant_id.isdigit()
+                else hashlib.sha256(" ".join(cells).encode()).hexdigest()[:16],
+                exam_score_sum=exam_score_sum,
+                individual_achievements=individual_achievements,
+                priority=priority,
+                consent_status=consent_status,
+                original_status=original_status,
+                application_status=application_status,
+                higher_priority_status=higher_priority_status,
                 source_row_hash=hashlib.sha256("|".join(cells).encode()).hexdigest(),
             )
         )
 
     metadata = CompetitionMetadata(
+        campaign_id=campaign_id,
+        competition_id=competition_id,
         program_code=program_code,
         program_name=program_name,
         funding_type=funding_type,
+        admission_basis=admission_basis,
         published_places=places,
+        applications_count=applications_count,
+        withdrawn_count=withdrawn_count,
         source_url=source_url,
         source_hash=hashlib.sha256(html.encode("utf-8")).hexdigest(),
     )
@@ -201,6 +227,26 @@ def _int_or_none(value: Any) -> int | None:
         return None
 
 
+def _first_int_or_none(value: Any) -> int | None:
+    if value is None or isinstance(value, bool):
+        return None
+    if isinstance(value, int):
+        return value
+    digits = ""
+    for char in str(value):
+        if char.isdigit():
+            digits += char
+            continue
+        if digits:
+            break
+    if not digits:
+        return None
+    try:
+        return int(digits)
+    except ValueError:
+        return None
+
+
 def _bool_or_none(value: Any) -> bool | None:
     if isinstance(value, bool):
         return value
@@ -212,6 +258,13 @@ def _bool_or_none(value: Any) -> bool | None:
     if text in {"нет", "false", "0", "no"}:
         return False
     return None
+
+
+def _dash_to_none(value: Any) -> str | None:
+    text = _string_or_none(value)
+    if text in {None, "-", "—", "–"}:
+        return None
+    return text
 
 
 def _string_or_none(value: Any) -> str | None:

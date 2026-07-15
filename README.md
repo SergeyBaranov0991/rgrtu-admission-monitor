@@ -156,7 +156,8 @@ The bot reads current public data from:
 
 - public competition overview page: <https://postupai.rsreu.ru/guest/competition-lists/20>
 - Livewire component embedded in that page: `competition-lists-common`
-- direct competition pages selected from `competitions[].id`, for example:
+- direct competition pages selected either from `competitions[].id` or, when the Livewire memo is
+  empty, from overview-card links, for example:
   <https://postupai.rsreu.ru/guest/competition-lists/20/1863247416534381847>
 
 Historical references are static constants sourced from official RGRTU pages:

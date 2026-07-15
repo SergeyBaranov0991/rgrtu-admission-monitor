@@ -7,10 +7,13 @@ from app.rgrtu.livewire_adapter import (
     SourceSchemaError,
     build_empty_competition,
     build_filter_updates,
+    extract_competition_cards,
     extract_livewire_component,
     extract_livewire_response_html,
     extract_livewire_token,
     program_info_for_competition_payload,
+    select_profile_competition_cards,
+    select_tracked_competition_card,
     select_profile_competitions,
     select_tracked_competition,
 )
@@ -123,6 +126,40 @@ def test_select_profile_competitions_uses_tracked_profile_id() -> None:
     ]
 
 
+def test_extract_competition_cards_from_overview_links() -> None:
+    html = """
+    <a href="https://postupai.rsreu.ru/guest/competition-lists/20/111">
+      09.03.02 Информационные системы и технологии / очная форма, СОО или СПО, ФАИТУ /
+      общий Очная Основной Общий конкурс Количество мест: 19 Подано заявлений: 170
+    </a>
+    <a href="https://postupai.rsreu.ru/guest/competition-lists/20/222">
+      09.03.02 Информационные системы и технологии / очная форма, СОО или ПО, ФАИТУ /
+      договор Очная Основной По договору Количество мест: 15 Подано заявлений: 50
+    </a>
+    <a href="https://postupai.rsreu.ru/guest/competition-lists/20/333">
+      09.03.02 Информационные системы и технологии / заочная форма, СОО или СПО, ФАИТУ /
+      общий Заочная Основной Общий конкурс Количество мест: 7 Подано заявлений: 10
+    </a>
+    """
+    program = next(program for program in PROGRAMS if program.code == "09.03.02")
+
+    cards = extract_competition_cards(
+        html,
+        campaign_id=20,
+        base_url="https://postupai.rsreu.ru",
+    )
+    tracked = select_tracked_competition_card(cards, program, Funding.BUDGET)
+    profile = select_profile_competition_cards(cards, program)
+
+    assert len(cards) == 3
+    assert tracked.competition_id == "111"
+    assert tracked.places == 19
+    assert tracked.applications_count == 170
+    assert cards[1].funding_type == Funding.PAID
+    assert cards[1].admission_basis == "По договору"
+    assert [card.competition_id for card in profile] == ["111", "222"]
+
+
 def test_program_info_for_competition_payload_uses_title_or_edu_program() -> None:
     assert program_info_for_competition_payload(
         {"programSetPrintTitle": "10.03.01 Информационная безопасность"}
@@ -208,3 +245,49 @@ def test_table_parser_does_not_use_position_as_score() -> None:
 
     assert competition.rows[0].position == 1
     assert competition.rows[0].total_score == 195
+
+
+def test_table_parser_reads_direct_competition_columns() -> None:
+    competition = parse_competition_table_html(
+        """
+        <table>
+          <tr>
+            <th>№</th><th>Код из сервиса приема</th><th>Конкурсные баллы</th>
+            <th>Приоритет</th><th>Преимущественные права</th><th>Согласие на зачисление</th>
+            <th>Состояние абитуриента</th><th>ВПП</th><th>ОВП</th><th>Баллы за ИД</th><th>Всего</th>
+          </tr>
+          <tr>
+            <td>223 № 223 Код из сервиса приема 1268534</td>
+            <td>1268534</td>
+            <td>195</td>
+            <td>1</td>
+            <td>—</td>
+            <td>Да</td>
+            <td>Участвует в конкурсе</td>
+            <td>-</td>
+            <td>-</td>
+            <td>0</td>
+            <td>195</td>
+          </tr>
+        </table>
+        """,
+        program_code=PROGRAMS[0].code,
+        program_name=PROGRAMS[0].name,
+        funding_type=Funding.BUDGET,
+        places=PROGRAMS[0].general_places,
+        source_url="https://postupai.rsreu.ru/guest/competition-lists/20/1863247416534381847",
+        competition_id="1863247416534381847",
+        admission_basis="Общий конкурс",
+        applications_count=321,
+    )
+
+    row = competition.rows[0]
+    assert competition.metadata.competition_id == "1863247416534381847"
+    assert competition.metadata.admission_basis == "Общий конкурс"
+    assert competition.metadata.applications_count == 321
+    assert row.position == 223
+    assert row.anonymous_applicant_id == "1268534"
+    assert row.total_score == 195
+    assert row.priority == 1
+    assert row.consent_status is True
+    assert row.application_status == "Участвует в конкурсе"
